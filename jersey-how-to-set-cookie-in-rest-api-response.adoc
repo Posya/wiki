@@ -1,0 +1,73 @@
+= Jersey – How to set Cookie in REST API Response
+Doc Writer <pavel.kiselev@gmail.com>
+v1.0
+:toc:
+
+http://howtodoinjava.com/jersey/jersey-how-to-set-cookie-in-rest-api-response/[original]
+
+In this example, we will learn to *set cookies into HTTP responses sent by Jersey REST APIs*. This example makes use of `javax.ws.rs.core.Response` for setting cookies into REST responses sent to REST clients.
+
+== Set Cookie Syntax
+
+To set a cookie in REST API response, get the `Response` reference and use it’s `cookie()` method.
+
+[source,java]
+----
+Response.ok().entity(list).cookie(new NewCookie("cookieResponse", "cookieValueInReturn")).build();
+----
+
+== Rest API Example Code
+
+I have written below REST API for testing purpose.
+
+[source,java]
+----
+@GET
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public Response getAllEployees()
+{
+    Employees list = new Employees();
+    list.setEmployeeList(new ArrayList<Employee>());
+
+    list.getEmployeeList().add(new Employee(1, "Lokesh Gupta"));
+    list.getEmployeeList().add(new Employee(2, "Alex Kolenchiskey"));
+    list.getEmployeeList().add(new Employee(3, "David Kameron"));
+
+    return Response.ok().entity(list).cookie(new NewCookie("cookieResponse", "cookieValueInReturn")).build();
+}
+----
+
+== Demo
+
+Now let’s call above REST API using Jersey client code.
+
+[source,java]
+----
+public static void main(String[] args)
+{
+    Client client = ClientBuilder.newClient( new ClientConfig().register( LoggingFilter.class ) );
+    WebTarget webTarget = client.target("http://localhost:8080/JerseyDemos/rest").path("employees");
+
+    Invocation.Builder invocationBuilder =  webTarget.request(MediaType.APPLICATION_JSON);
+    Response response = invocationBuilder.get();
+
+    Employees employees = response.readEntity(Employees.class);
+    List<Employee> listOfEmployees = employees.getEmployeeList();
+
+    System.out.println(response.getCookies());
+    System.out.println(response.getStatus());
+    System.out.println(Arrays.toString( listOfEmployees.toArray(new Employee[listOfEmployees.size()]) ));
+}
+----
+
+=== Output:
+
+----
+{cookieResponse=cookieResponse=cookieValueInReturn;Version=1}
+200
+[Employee [id=1, name=Lokesh Gupta], Employee [id=2, name=Alex Kolenchiskey], Employee [id=3, name=David Kameron]]
+----
+
+Happy Learning !!
+

@@ -1,0 +1,94 @@
+= How to Create and verify JWTs in Java
+Doc Writer <pavel.kiselev@gmail.com>
+v1.0
+:toc:
+
+https://stormpath.com/blog/jwt-java-create-verify[original]
+
+Java support for JWT (JSON Web Tokens) is in its infancy – the prevalent libraries can require customization around unresolved dependencies and pages of code to assemble a simple JWT.
+
+We recently released an open-source library for JWTs in Java. https://github.com/jwtk/jjwt[JJWT] aims to be the easiest to use and understand library for creating and verifying JSON Web Tokens (JWTs) on the JVM.
+
+https://github.com/jwtk/jjwt[JJWT] is a ‘clean room’ implementation based solely on the JWT, JWS, JWE and JWA RFC draft specifications. According to one user on stack overflow, its “Simple, easy and clean, and worked immediately.” This post will show you how to use it, so any java app can generate, encrypt and decrypt JWTs without much hassle.
+
+== What Are JWTs?
+
+JWTs are an encoded representation of a JSON object. The JSON object consists of zero or more name/value pairs, where the names are strings and the values are arbitrary JSON values. JWT is useful to send such information in the clear (for example in an URL) while it can still be trusted to be unreadable (i.e. encrypted), unmodifiable (i.e. signed) and url-safe (i.e. Base64 encoded).
+
+Want to learn more? You can check one of our http://stormpath.com/blog/jwt-the-right-way/[previous posts] and the http://self-issued.info/docs/draft-ietf-oauth-json-web-token.html[JWT spec].
+
+JWTs can have different usages: authentication mechanism, url-safe encoding, securely sharing private data, interoperability, data expiration, etc. Regardless of how you will use your JWT, the mechanisms to construct and verify it are the same. So, let’s see how we can very easily achieve that with the https://github.com/jwtk/jjwt[JSON Web Token for Java] project
+
+
+== Generate Tokens
+
+[source,java]
+----
+import javax.crypto.spec.SecretKeySpec;
+import javax.xml.bind.DatatypeConverter;
+import java.security.Key;
+import io.jsonwebtoken.*;
+import java.util.Date;
+
+//Sample method to construct a JWT
+
+private String createJWT(String id, String issuer, String subject, long ttlMillis) {
+
+//The JWT signature algorithm we will be using to sign the token
+SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.HS256;
+
+long nowMillis = System.currentTimeMillis();
+Date now = new Date(nowMillis);
+
+//We will sign our JWT with our ApiKey secret
+byte[] apiKeySecretBytes = DatatypeConverter.parseBase64Binary(apiKey.getSecret());
+Key signingKey = new SecretKeySpec(apiKeySecretBytes, signatureAlgorithm.getJcaName());
+
+  //Let's set the JWT Claims
+JwtBuilder builder = Jwts.builder().setId(id)
+                                .setIssuedAt(now)
+                                .setSubject(subject)
+                                .setIssuer(issuer)
+                                .signWith(signatureAlgorithm, signingKey);
+
+ //if it has been specified, let's add the expiration
+if (ttlMillis >= 0) {
+    long expMillis = nowMillis + ttlMillis;
+    Date exp = new Date(expMillis);
+    builder.setExpiration(exp);
+}
+
+ //Builds the JWT and serializes it to a compact, URL-safe string
+return builder.compact();
+}
+----
+
+== Decode and Verify Tokens
+
+[source,java]
+----
+java
+import javax.xml.bind.DatatypeConverter;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.Claims;
+
+//Sample method to validate and read the JWT
+private void parseJWT(String jwt) {
+//This line will throw an exception if it is not a signed JWS (as expected)
+Claims claims = Jwts.parser()
+   .setSigningKey(DatatypeConverter.parseBase64Binary(apiKey.getSecret()))
+   .parseClaimsJws(jwt).getBody();
+System.out.println("ID: " + claims.getId());
+System.out.println("Subject: " + claims.getSubject());
+System.out.println("Issuer: " + claims.getIssuer());
+System.out.println("Expiration: " + claims.getExpiration());
+}
+----
+
+== To sum it up…
+
+We tried to make it very easy to both construct and verify JWTs using https://github.com/jwtk/jjwt[JSON Web Token for Java]. You only need to specify the data you want to encode and sign it with a key. Later, with that same key you can verify the authenticity of the token and decode it. The http://stormpath.com/blog/jwt-the-right-way/[benefits] of using JWT greatly exceed the time and effort of implementing them. Give it a try and you will have a hassle-free and more secure application.
+
+Last but not least, do not forget to use SSL when communicating with remote peers since the token will be travelling over the wire on every request.
+
+Please leave your comments below and check out our new https://docs.stormpath.com/java/spring-boot-web/[Spring Boot Support] and https://docs.stormpath.com/java/servlet-plugin/[Java Servlet Support]. We’re investing heavily in making authentication, user management, and single sign-on across Java applications easy, free and secure. You can read more about http://stormpath.com/product/java/[Stormpath user management for the JVM].

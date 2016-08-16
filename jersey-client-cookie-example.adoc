@@ -1,0 +1,100 @@
+= Jersey Client – Set Cookie Example
+Doc Writer <pavel.kiselev@gmail.com>
+v1.0
+:toc:
+
+http://howtodoinjava.com/jersey/jersey-client-cookie-example/[original]
+
+In this example, we will learn to *set cookies into HTTP requests invoked by Jersey client*. This example makes use of `Invocation.Builder` for setting cookies into outgoing REST calls.
+
+== Set Cookie Example
+
+To set a cookie in REST API request, first get reference of `Invocation.Builder` from `webTarget.request()` method, and then use it’s methods.
+
+[source,java]
+----
+Client client = ClientBuilder.newClient( new ClientConfig().register( LoggingFilter.class ) );
+WebTarget webTarget = client.target("http://localhost:8080/JerseyDemos/rest").path("employees");
+
+Invocation.Builder invocationBuilder =  webTarget.request(MediaType.APPLICATION_JSON);
+Response response = invocationBuilder
+                            .cookie("cookieParam1","cookieValue1")
+                            .cookie(new Cookie("cookieParam2", "cookieValue2"))
+                            .get();
+
+Employees employees = response.readEntity(Employees.class);
+//More code
+----
+
+== Rest API Code
+
+I have written below REST API for testing purpose.
+
+[source,java]
+----
+@GET
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public Employees getAllEployees(@CookieParam(value="cookieParam1") String cookieParam1,
+                                @CookieParam(value="cookieParam2") String cookieParam2)
+{
+    System.out.println("cookieParam1 is :: "+ cookieParam1);
+    System.out.println("cookieParam2 is :: "+ cookieParam2);
+
+    Employees list = new Employees();
+    list.setEmployeeList(new ArrayList<Employee>());
+
+    list.getEmployeeList().add(new Employee(1, "Lokesh Gupta"));
+    list.getEmployeeList().add(new Employee(2, "Alex Kolenchiskey"));
+    list.getEmployeeList().add(new Employee(3, "David Kameron"));
+
+    return list;
+}
+----
+
+== Demo
+
+Now let’s call above REST API using Jersey client code as suggested in first heading.
+
+[source,java]
+----
+public static void main(String[] args)
+{
+    Client client = ClientBuilder.newClient( new ClientConfig().register( LoggingFilter.class ) );
+    WebTarget webTarget = client.target("http://localhost:8080/JerseyDemos/rest").path("employees");
+
+    Invocation.Builder invocationBuilder =  webTarget.request(MediaType.APPLICATION_JSON);
+    Response response = invocationBuilder
+                                .cookie("cookieParam1","cookieValue1")
+                                .cookie(new Cookie("cookieParam2", "cookieValue2"))
+                                .get();
+
+    Employees employees = response.readEntity(Employees.class);
+    List<Employee> listOfEmployees = employees.getEmployeeList();
+
+    System.out.println(response.getStatus());
+    System.out.println(Arrays.toString( listOfEmployees.toArray(new Employee[listOfEmployees.size()]) ));
+}
+----
+
+=== Output:
+
+==== On client side:
+
+----
+Oct 01, 2015 4:53:59 PM org.glassfish.jersey.filter.LoggingFilter log
+INFO: 1 * Sending client request on thread main
+1 > GET http://localhost:8080/JerseyDemos/rest/employees
+1 > Accept: application/json
+1 > Cookie: $Version=1;cookieParam1=cookieValue1,$Version=1;cookieParam2=cookieValue2
+----
+
+==== On server side:
+
+----
+cookieParam1 is :: cookieValue1
+cookieParam2 is :: cookieValue2
+----
+
+Happy Learning !!
+

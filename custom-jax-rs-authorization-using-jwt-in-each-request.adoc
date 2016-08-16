@@ -1,0 +1,130 @@
+= Custom JAX-RS authorization - using JWT in each request
+
+You can perform this logic in a
+https://jersey.java.net/documentation/latest/filters-and-interceptors.html#d0e9543[`ContainerRequestFilter`].
+It pretty common to handle custom security features in here.
+
+Some things to consider
+
+1.  The class should be annotated with
+https://jersey.java.net/documentation/latest/filters-and-interceptors.html#d0e10023[`@Priority(Priorities.AUTHENTICATION)`]
+so it is performed before other filters, if any.
+2.  You should make use of the
+http://docs.oracle.com/javaee/7/api/javax/ws/rs/core/SecurityContext.html[`SecurityContext`],
+inside the filter. What I do is implement a `SecurityContext`. You can
+really implement it anyway you want.
+
+Here's a simple example without any of the security logic
+
+[source,java]
+----
+@Provider
+@Priority(Priorities.AUTHENTICATION)
+public class SecurityFilter implements ContainerRequestFilter {
+
+    @Override
+    public void filter(ContainerRequestContext requestContext) throws IOException {
+        SecurityContext originalContext = requestContext.getSecurityContext();
+        Set<String> roles = new HashSet<>();
+        roles.add("ADMIN");
+        Authorizer authorizer = new Authorizer(roles, "admin",
+                                               originalContext.isSecure());
+        requestContext.setSecurityContext(authorizer);
+    }
+
+    public static class Authorizer implements SecurityContext {
+
+        Set<String> roles;
+        String username;
+        boolean isSecure;
+        public Authorizer(Set<String> roles, final String username,
+                                             boolean isSecure) {
+            this.roles = roles;
+            this.username = username;
+            this.isSecure = isSecure;
+        }
+
+        @Override
+        public Principal getUserPrincipal() {
+            return new User(username);
+        }
+
+        @Override
+        public boolean isUserInRole(String role) {
+            return roles.contains(role);
+        }
+
+        @Override
+        public boolean isSecure() {
+            return isSecure;
+        }
+
+        @Override
+        public String getAuthenticationScheme() {
+            return "Your Scheme";
+        }
+    }
+
+    public static class User implements Principal {
+        String name;
+
+        public User(String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String getName() { return name; }
+    }
+}
+----
+
+A few things to notice
+
+* I've created a `SecurityContext`
+* I've added some roles, and used them for the `isUserInRole` method.
+This will be used for authorization.
+* I've created a custom `User` class, that implements
+`java.security.Principal`. I returned this custom object
+* Finally I set the new `SecurityContext` in the
+`ContainerRequestContext`
+
+Now what? Let's look at a simple resource class
+
+[source,java]
+-------------------------------------------------------------------------
+@Path("secure")
+public class SecuredResource {
+    @GET
+    @RolesAllowed({"ADMIN"})
+    public String getUsername(@Context SecurityContext securityContext) {
+        User user = (User)securityContext.getUserPrincipal();
+        return user.getName();
+    }
+}
+-------------------------------------------------------------------------
+
+A few things to notice:
+
+* `SecurityContext` is injected into the method.
+* We get the `Principal` and cast it to `User`. So really you can create
+any class that implements `Principal`, and use this object however you
+want.
+* The use of the `@RolesAllowed` annotation. With Jersey, there is a
+filter that checks the `SecurityContext.isUserInRole` by passing in each
+value in the `@RolesAllowed` annotation to see if the User is allowed to
+access the resource.
++
+To enable this feature with Jersey, we need to register the
+`RolesAllowedDynamicFeature`
++
+[source,java]
+---------------------------------------------------
+@ApplicationPath("/api")
+public class AppConfig extends ResourceConfig {
+
+    public AppConfig() {
+        packages("packages.to.scan");
+        register(RolesAllowedDynamicFeature.class);
+    }
+}
+---------------------------------------------------

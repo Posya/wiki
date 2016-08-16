@@ -1,0 +1,47 @@
+= Java web-application performance improvement tips
+Doc Writer <pavel.kiselev@gmail.com>
+v1.0
+:toc:
+
+http://howtodoinjava.com/best-practices/improving-web-application-performance/[original]
+
+****
+Web application’s performance is very critical for the success of the project, in any company and with any client. You should have a good thought process about possible bottlenecks and their solutions.
+
+Recently, Sriman, one of the blog reader, asked this question to me. Well, I assumed that answer to this question may help larger group of you guys, so I am posting the answer here.
+****
+
+== Performance tips
+
+Many of you agree that performance is itself a relative term. An awesome performing application can be a total disappointment for other person or your customer. So, like any other relative measurements, you have to follow basics here as well.
+
+. *Define (awesome) performance benchmarks* :
++
+The very first thing you need to do is to decide what is good performance for you. It should be a measurable goal in terms of time units or resource utilization.
+
+. *Identify problem areas* :
++
+Once you are done defining the benchmark figures, use tools to identify areas where application is lagging behind benchmark numbers. Deep dive to statement level in your code. Identify which pieces of code is causing the degraded performance. List each of them and keep track of each piece in whole process. Note: Please remember that over-optimization often results into more harm. So choose wisely.
+
+. *Solve each problem and measure the difference* :
++
+Brainstorm on each problem with your team member, and find the best way to solve that problem. One at a time. Compare each solution of each problem, and record their result.
+
+. *Measure overall performance* :
++
+At last, measure overall application performance improvement and compare with benchmarks. It still you are lagging, then repeat all steps.
+
+While, above steps are complete in sense of what need to be done exactly – to improve performance in measurable way, yet you need to keep few things in mind:
+
+- *Think out of the box*. e.g. If Database querying taking time, then instead of over-optimizing the SQL statement, think of using caching.
+- *Never assume/guess anything*. Always make proposed change, and record it’s performance.
+- *Take help of automation*. Use tools to capture performance after every change. It will make life much easy.
+- *Avoid over-optimization*. Prefer simplicity and maintainability of code.
+- *Consider using advanced and more capable hardware/network solutions* as well. They make big impact sometimes.
+
+And always remember, performance is relative experience. *Ask your customers for feedback*. If they are happy, then never attempt to fix anything in your application.
+
+I hope that above thought process will help you in overcoming that complex situation, when you are optimizing any application’s performance.
+
+Happy Learning !!
+

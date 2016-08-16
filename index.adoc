@@ -1,0 +1,27 @@
+= Оглавление
+Doc Writer <pavel.kiselev@gmail.com>
+v1.0
+:toc:
+
+== Inbox
+- link:best-practice-for-rest-token-based-authentication-with-jax-rs-and-jersey.adoc[Best practice for REST token-based authentication with JAX-RS and Jersey]
+- link:jax-rs-gson-example.adoc[Jersey + Google Gson Example]
+- link:jwt-java-create-verify.adoc[How to Create and verify JWTs in Java]
+
+== Angular
+- link:angularjs-http-restful-api-example.adoc[AngularJS $http – RESTful API Example]
+- link:angularjs-tutorial-helloworld-example.adoc[AngularJS Tutorial – HelloWorld Example]
+
+== Performance
+- link:improving-web-application-performance.adoc[Java web-application performance improvement tips]
+
+== Cookie
+- link:jersey-client-cookie-example.adoc[Jersey Client – Set Cookie Example]
+- link:jersey-how-to-set-cookie-in-rest-api-response.adoc[Jersey – How to set Cookie in REST API Response]
+
+== Multithreading
+- link:multithreading-difference-between-lock-and-monitor.adoc[Difference between lock and monitor – Java Concurrency]
+
+
+
+

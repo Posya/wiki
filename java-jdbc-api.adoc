@@ -1,0 +1,236 @@
+= JDBC API в Java - обзор и туториал
+
+На этот раз я хотел бы уделить внимание работе с базами данных с помощью `JDBC API`.
+
+Спор под названием `Hibernate` (точнее `JPA`) против `JDBC` оставим в стороне. Оба подхода имеют право на существование. Если хотите услышать мое личное мнение по этому поводу, то загляните в конец статьи.
+
+А сейчас давайте рассмотрим следующие вопросы:
+
+- <<1, DriverManager и JDBC Driver>>
+- <<2, Соединение к базе данных>>
+- <<3, Используем Statement и ResultSet>>
+- <<4, PreparedStatement и пакетное выполнение запросов>>
+- <<5, Транзакции в JDBC>>
+- <<6, Использование DatabaseMetaData>>
+- <<7, Заключение>>
+
+
+
+== anchor:1[]DriverManager и JDBC Driver
+
+
+Во всех примерах подключения к базе данных в Интернете вы обязательно встретите эти строки:
+
+[source,java]
+----
+Class.forName(driverClass);
+Connection connection = DriverManager
+        .getConnection(url, user, password) ;
+----
+
+Где `driverClass` - это строка с полным именем класса JDBC драйвера, например `org.h2.Driver` для `H2 Database` или `com.mysql.jdbc.Driver` для MySql.
+
+Обычно на этом повествование про драйвер и `DriverManager` заканчивается. Ну а мы копнем чуть глубже.
+
+Все основные сущности в JDBC API, с которыми вам предстоит работать, являются интерфейсами:
+
+- `Connection`;
+- `Statement`;
+- `PreparedStatement`;
+- `CallableStatement`;
+- `ResultSet`;
+- `Driver`;
+- `DatabaseMetaData`.
+
+`JDBC драйвер` конкретной базы данных как раз и предоставляет реализации этих интерфейсов.
+
+`DriverManager` - это синглтон, который содержит информацию о всех зарегистрированных драйверах. Метод `getConnection` на основании параметра URL находит `java.sql.Driver` соответствующей базы данных и вызывает у него метод connect.
+
+Так а зачем же вызов `Class.forName()`?
+
+Если посмотреть исходный код реализации любого драйвера он будет содержать статический блок инициализации такого вида:
+
+[source,java]
+----
+static {
+    try {
+        java.sql.DriverManager.registerDriver(new Driver());
+    } catch (SQLException e) {
+        throw new RuntimeException("Can't register driver!");
+    }
+}
+----
+
+Вызов `Class.forName` загружает класс и этим гарантирует выполнение статического блока инициализации, а значит и регистрацию драйвера в `DriverManager`.
+
+== anchor:2[]Соединение к базе данных
+
+В статье я предлагаю воспользоваться легковесной базой данных, написанной на Java, под названием `H2 Database`. В данный момент для нас преимущество ее использования состоит в том, что скачав джарку http://www.h2database.com/html/download.html[здесь] вы получаете сразу и саму базу данных, и драйвер для подключения к ней, что для обучения очень удобно.
+
+Подробнее об H2 я обязательно расскажу в отдельной статье, а пока что создадим соединение к базе данных:
+
+[source,java]
+----
+Class.forName("org.h2.Driver");
+Connection connection = DriverManager.getConnection("jdbc:h2:mem:test");
+----
+
+Таким образом, мы получили реализацию интерфейса `java.sql.Connection` для нашей базы данных.
+
+Полный код всех примеров можно найти в конце статьи.
+
+== anchor:3[]Используем Statement и ResultSet
+
+На основании соединения можно получить объект `java.sql.Statement` для выполнения запросов к базе.
+
+[source,java]
+----
+Statement statement = connection.createStatement();
+statement.execute("create table user(" +
+        "id integer primary key auto_increment, " +
+        "name varchar(100));");
+----
+
+В результате выполнения этого фрагмента кода будет создана таблица `user` с двумя колонками `id` и `name`.
+
+Statement можно использовать для выполнения любых запросов, будь то DDL, DML, либо обычные запросы на выборку данных.
+
+[source,java]
+----
+statement.execute("insert into user(name) values('borya'),('petya')");
+ResultSet rs = statement.executeQuery("select * from user");
+while (rs.next()) {
+    System.out.println(rs.getInt("id") + " : " + rs.getString("name"));
+}
+----
+
+Объект `ResultSet` - это результат выполнения запроса.
+
+Объекты `Connection`, `Statement` и `ResultSet` после использования необходимо закрывать. Поэтому приведенный выше код необходимо обернуть в `try-finally` и в блоке `finally` добавить закрытие ресурсов:
+
+[source,java]
+----
+if (rs != null)
+    try { rs.close(); }
+    catch (SQLException ignore) { }
+if (statement != null)
+    try { statement.close(); }
+    catch (SQLException ignore) { }
+if (connection != null)
+    try { connection.close(); }
+    catch (SQLException ignore) { }
+----
+
+Выглядит не очень красиво, не правда ли. Закрытие `ResultSet` можно убрать, ведь в соответствии с контрактом:
+
+> A `ResultSet` object is automatically closed by the `Statement` object that generated it when that `Statement` object is closed, re-executed, or is used to retrieve the next result from a sequence of multiple results.
+
+Но все равно не то...
+
+С приходом Java 1.7 ситуация немного изменилась в лучшую сторону, так как была добавлена конструкция `try-with-resources`, которая гарантирует что все `Closeable` ресурсы будут закрыты после выполнения `try` блока. Наш код превращается в следующий более элегантный фрагмент:
+
+[source,java]
+----
+try (Connection connection = DriverManager.getConnection("jdbc:h2:mem:test");
+        Statement statement = connection.createStatement()) {
+    statement.execute("create table user(" +
+            "id integer primary key auto_increment, " +
+            "name varchar(100));");
+
+    statement.execute("insert into user(name) values('borya'),('petya')");
+    ResultSet rs = statement.executeQuery("select * from user");
+    while (rs.next()) {
+        System.out.println(rs.getInt("id") + " : " + rs.getString("name"));
+    }
+}
+----
+
+== anchor:4[]PreparedStatement и пакетное выполнение запросов
+
+Если вам нужно выполнить несколько похожих запросов, то разумным решением будет использование `PreparedStatement`.
+
+`PreparedStatement` представляет собой скомпилированную версию SQL-выражения, выполнение которого будет быстрее и эффективнее.
+
+[source,java]
+----
+PreparedStatement statement = connection
+        .prepareStatement("insert into user(id,name) values(?,?)");
+statement.setInt(1, 3);
+statement.setString(2, "fedya");
+statement.executeUpdate();
+----
+
+`PreparedStatement` поддерживает пакетную (`batch`) отправку SQL запросов, что значительно уменьшает траффик между клиентом и базой данных. Небольшой пример:
+
+[source,java]
+----
+PreparedStatement statement = connection
+        .prepareStatement("insert into user(id,name) values(?,?)");
+statement.setInt(1, 4);
+statement.setString(2, "misha");
+statement.addBatch();
+statement.setInt(1, 5);
+statement.setString(2, "grisha");
+statement.addBatch();
+statement.executeBatch();
+----
+
+Обратите внимание, что проставлять параметры в `PreparedStatement` необходимо через индексы, к тому же отсчет идет с единицы. Если параметров много и есть вероятность, что они периодически будут добавляться или удаляться, то можно воспользоваться таким вариантом:
+
+[source,java]
+----
+PreparedStatement statement = connection
+        .prepareStatement("insert into user(id,name) values(?,?)");
+int i = 0;
+statement.setInt(++i, 4);
+statement.setString(++i, "misha");
+statement.executeUpdate();
+----
+
+== anchor:5[]Транзакции в JDBC
+
+Тех, кто знакомился с Hibernate минуя JDBC, обычно очень удивляет работа с транзакциями.
+
+По умолчанию каждое SQL-выражение автоматически коммитится при выполнении `statement.execute` и подобных методов. Для того, чтобы открыть транзакцию сначала необходимо установить флаг `autoCommit` у соединения в значение `false`. Ну а дальше нам пригодятся всем знакомые методы `commit` и `rollback`.
+
+[source,java]
+----
+connection.setAutoCommit(false);
+
+Statement st = connection.createStatement();
+try {
+    st.execute("insert into user(name) values('kesha')");
+    connection.commit();
+} catch (SQLException e)  {
+    connection.rollback();
+}
+----
+
+== anchor:6[]Использование DatabaseMetaData
+
+С помощью `Connection` можно получиь очень полезную сущность `DatabaseMetaData`. Она позволяет получить метаинформацию о схеме базы данных, а именно какие в базе данных есть объекты - таблицы, колонки, индексы, триггеры, процедуры и так далее.
+
+Лично я часто использую `DatabaseMetaData` для модификации схемы базы данных программным способом, например:
+
+[source,java]
+----
+rs = connection.getMetaData()
+        .getTables(c.getCatalog(), null, "USER", null);
+if (!rs.next()) {
+    Statement statement = connection.createStatement()) {
+    statement.execute("create table user(" +
+            "id integer primary key auto_increment, " +
+            "name varchar(100));");
+}
+----
+
+После добавления новой функциональности можно проверить, а не созданы ли уже соответствующие объекты, и в случае необходимости модифицировать схему.
+
+== anchor:7[]Заключение
+
+Конечно, JDBC API создано далеко не идеальным. Например, `SQLException` является `checked` исключением и его повсюду надо тянуть или оборачивать; работа с `PreparedStatement` достаточно неудобная, как мы уже видели.
+
+Но в подавляющем большинстве случаев я использую именно JDBC для свои приложений, так как JDBC дает максимальную гибкость и эффективность. Возможно с Hibernate вы сэкономите один день, так как вам не придется писать код для создания схемы, а так же запросы для чтения и записи объектов. Но что такое один день по сравнению со временем существования приложения? К тому же практика показывает, что периодически Hibernate преподносит разрабочикам интересные челенджи, решение которых может забрать не только время, но и нервы
+
+Полный исходный код примеров из статьи можно найти здесь http://www.javenue.info/files/SqlExamples.java[SqlExamples.java].
+

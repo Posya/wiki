@@ -1,0 +1,125 @@
+= RESTful Web Services Security Guide
+Doc Writer <pavel.kiselev@gmail.com>
+v1.0
+:toc:
+
+http://howtodoinjava.com/security/restful-web-services-security-guide/[original]
+
+****
+Knowledge of securing RESTful Web Services is as much important as to write them. Mostly RESTful APIs are HTTP protocol based, you any user having internet connection can connect to it, and so hackers as well. It’s very important to write secure APIs to protect the business. But before starting to secure RESTful APIs, let’s understand what are our options as developers? What will be good fit for our usecase?
+****
+
+== Authentication vs. Authorization
+
+Before jumping into main discussion, let’s make our facts straight about what is authentication and what is authorization.
+
+In plain simple English, *authentication* is the process of ascertaining that somebody really is who he claims to be. In technical terms, it’s process of login to system through username/password or any similar mechanisms e.g. finger print scanning, security token, security questions or SAML token received from SSO login. There must be something which can identify the user from others.
+
+Once user is inside system, *authorization* refers to rules that determine what he is allowed to do and what he is not e.g. a normal user can post a message in any public group, but users only with editor role will be able to delete something. Authorization is often seen as both the introductory setting up of permissions by a system administrator and the checking of the permission values that have already been set up when a user is getting access to the system.
+
+When securing RESTful APIs, you need to take care of both the factors. The two concepts are completely orthogonal and independent, but both are central to security design, and the failure to get either one correct increase the chances of compromised system..
+
+== 4 Ways to Secure RESTful Web Services
+
+There are multiple ways to secure a RESTful API in Java. Let’s go through 4 most popular choices:
+
+=== BASIC Authentication
+
+It’s simplest of all techniques and probably most used as well. You use login/password forms – it’s basic authentication only. You input your username and password and submit the form to server, and application identify you as a user – you are allowed to use the system – else you get error.
+
+The main problem with this security implementation is that credentials are propagated in a plain way from the client to the server. Credentials are merely encoded with Base64 in transit, but not encrypted or hashed in any way. This way, any sniffer could read the sent packages over the network.
+
+HTTPS is, therefore, typically preferred over or used in conjunction with Basic Authentication which makes the conversation with the web server entirely encrypted. The best part is that nobody can even guess from the outside that Basic Auth is taking place.
+
+=== DIGEST Authentication
+
+This authentication method makes use of a hashing algorithms to encrypt the password (called *password hash*) entered by the user before sending it to the server. This, obviously, makes it much safer than the basic authentication method, in which the user’s password travels in plain text that can be easily read by whoever intercepts it.
+
+TIP: Read More: http://howtodoinjava.com/security/how-to-generate-secure-password-hash-md5-sha-pbkdf2-bcrypt-examples/[Generate Encrypted Passwords]
+
+There are many such hashing algorithms in java also, which can prove really effective for password security such as MD5, SHA, BCrypt, SCrypt and PBKDF2WithHmacSHA1 algorithms.
+
+Please remember that once this password hash is generated and stored in database, you can not convert it back to original password. Each time user login into application, you have to regenerate password hash again, and match with hash stored in database. So, if user forgot his/her password, you will have to send him a temporary password and ask him to change it with his new password. Well, it’s common trend now-a-days.
+
+=== CLIENT CERT Authentication
+
+This is a mechanism in which a trust agreement is established between the server and the client through certificates. They must be signed by an agency established to ensure that the certificate presented for authentication is legitimate, which is known as CA.
+
+Using this technique, when the client attempts to access a protected resource, instead of providing a username or password, it presents the certificate to the server. The certificate contains the user information for authentication including security credentials, besides a unique private-public key pair. The server then determines if the user is legitimate through the CA. Additionally, it must verify whether the user has access to the resource. This mechanism must use HTTPS as the communication protocol as we don’t have a secure channel to prevent anyone from stealing the client’s identity.
+
+You can find a complete tutorial for https://docs.oracle.com/javase/tutorial/security/apisign/index.html[generating security certificate in official oracle docs].
+
+=== Using API Keys
+
+If you have ever developed applications which interact other with other applications over cloud e.g. facebook integration or twitter authentication etc. then you have already used this. They require you to provide API key and API secret to rightly identify you. These API key and secret are some random encoded string which is impossible to guess.
+
+To understand how it works, let’s assume you are using a Flickr (photo sharing application) and want to post some of your photos using it’s REST API. You build the request as documented in Flickr docs, then send it.
+
+Then, when receiving the request, Flickr authenticates the user by reading the information from the API key with the secret key that belongs to the user. Once these validations are successful, the server delivers the response to the client. Thus, we obtain a response with all the photos that have been recently posted within Flickr.
+
+As you’ll notice, this way, you can easily create applications using the provider’s API. Also, the provider will allow you to authenticate, access public information.
+
+If someone starts disrespecting agreements e.g. sending junk traffic or any policy violation, the provider withdraws the API key and prevent the abusive use of its APIs.
+
+
+== RESTful Web Services Security Implementations
+
+Apart from above concepts, you will usually need to secure your RESTful APIs in your company using below methods.
+
+=== Using SecurityContext
+
+The `javax.ws.rs.core.SecurityContext` interface provides access to security-related information for a request and is very similar to `javax.servlet.http.HttpServletRequest`.
+
+You access the SecurityContext by injecting an instance into a class field, setter method, or method parameter using the `javax.ws.rs.core.Context` annotation e.g. in below code `sc.isUserInRole()` is used to check authorization for user.
+
+[source,java]
+----
+@GET
+@Produces("text/plain;charset=UTF-8")
+@Path("/hello")
+public String sayHello(@Context SecurityContext sc) {
+        if (sc.isUserInRole("admin"))
+            return "Hello World!";
+        throw new SecurityException("User is unauthorized.");
+}
+----
+
+=== Method level Authorization Using Annotations
+
+This technique is widely used in enterprise application and used to verify roles and responsibities of an authenticated used – for any certain operation. JAX-RS provides below annotations for this purpose.
+
+- http://docs.oracle.com/javaee/6/api/javax/annotation/security/PermitAll.html[@PermitAll]
+- http://docs.oracle.com/javaee/6/api/javax/annotation/security/DenyAll.html[@DenyAll]
+- http://docs.oracle.com/javaee/6/api/javax/annotation/security/RolesAllowed.html[@RolesAllowed]
+
+An example ue of annotation can be:
+
+[source,java]
+----
+@RolesAllowed("ADMIN")
+@PUT
+@Path("/users/{id}")
+public Response updateUserById(@PathParam("id") int id)
+{
+    //Update the User resource
+    UserDatabase.updateUser(id);
+    return Response.status(200).build();
+}
+----
+
+TIP: Read More : RESTEasy Authentication and Authorization Tutorial
+
+== Best Practices
+
+Let’s note down some important points while designing security for your RESTful web services.
+
+. Use only HTTPS protocol so that your whole communocation is always encrypted.
+. Never send auth credentials or API keys as query param. They appear in URL and can be logged or tracked easily.
+. Use hardest encryption level always. It will help in having more confidence.
+. For resources exposed by RESTful web services, it’s important to make sure any PUT, POST, and DELETE request is protected from Cross Site Request Forgery.
+. Always validate the input data asap it is recieved in server method. Use only primitive data as input parameter as much as possible.
+. Rely on framework provided validation features as they are tested by large community already.
+
+Let me know your thoughts and experiences on securing RESTful web services in your organization.
+
+Happy Learning !!

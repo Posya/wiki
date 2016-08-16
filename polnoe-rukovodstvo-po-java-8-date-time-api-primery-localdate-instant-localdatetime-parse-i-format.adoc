@@ -1,0 +1,305 @@
+= Полное руководство по Java 8 Date Time API. Примеры LocalDate, Instant, LocalDateTime, Parse и Format
+
+С самых первых версий в Java не было единого и удобного подхода для работы с датой и временем, поэтому новый Date/Time API является одним из самых нужных и важных нововведений в Java 8. В этой статье мы на примерах рассмотрим все самые главные нововведения для работы с датой и временем.
+
+== Что нам дает новый Java Date Time API?
+
+Прежде чем мы начнем разбираться с новым Java 8 Date Time API, давайте рассмотрим главные проблемы в работе с датой и временем версий Java 7 и ниже:
+
+. Классы Java Date Time раскиданы по пакетам. Так, класс `Date Class` есть как в пакете `java.util`, так и в `java.sql` пакете. Классы для форматирования и парсинга определены в `java.text` пакете.
+. Пакет `java.util.Date` содержит как дату, так и время, в то время как `java.sql.Date` содержит только дату. По моему, оба класса не очень хорошо спроектированы.
+. Все классы для работы с датой могут изменяться, поэтому они не потокобезопасны. Это одна из самых больших проблем в Date и Calendar классах.
+. Класс Date не обеспечивает интернационализацию, не поддерживает часовые пояса. Поэтому были введены классы `java.util.Calendar` и `java.util.TimeZone`, но опять-таки, они имеют все перечисленные выше проблемы.
+
+Ввиду всех перечисленных выше недостатков сторонними разработчиками была создана библиотека для работы с датой и временем. Она называется http://www.joda.org/joda-time/[Joda Time] и очень часто используется в качестве замены стандартным Java классам. Но это тема уже другой статьи.
+
+== Разбор Java 8 Date Time API
+
+Java 8 Date Time API предназначена заменить старые классы для работы со временем и датой. Давайте рассмотрим основные пакеты нового API.
+
+. Пакет `java.time` — Это базовый пакет нового Date Time API. Все основные базовые классы являются частью этого пакета: `LocalDate`, `LocalTime`, `LocalDateTime`, `Instant`, `Period`, `Duration` и другие. Все эти классы являются неизменными и потокобезопасными. В большинстве случаев, этих классов будет достаточно для большинства задач.
+. Пакет `java.time.chrono` — пакет с общими интерфейсами для не календарных систем ISO. Мы можем наследовать класс `AbstractChronology` для создания собственной календарной системы.
+. Пакет `java.time.format` — пакет с классами форматирования и парсинга времени и даты. В большинстве случаев, мы не будем использовать их напрямую, потому что классы в пакете `java.time` предоставляют удобные методы для форматирования и парсинга.
+. Пакет `java.time.temporal` используется для работы с временными объектами, например, с помощью него мы можем узнать первый или последний день месяца. Методы таких классов сразу заметны на фоне других, потому что всегда имеют формат `‘withXXX‘`.
+. Пакет `java.time.zone` — классы для поддержки различных часовых поясов и правила их изменения.
+
+== Примеры использования Java Date Time API
+
+Мы уже рассмотрели наиболее важные части Java Date Time API. Пришло время разобраться с классами и и посмотреть их в работе на небольших примерах.
+
+=== Класс java.time.LocalDate
+
+`java.time.LocalDate` — неизменяемый класс, который представляет объекты Date в формате по умолчанию `yyyy-MM-dd`. Мы можем использовать метод `now()`, чтобы получить текущую дату. Мы также можем предоставить в качестве аргументов год, месяц и день, чтобы создать экземпляр `LocalDate`. Этот класс предоставляет перегруженный метод `now()`, которому мы можем предоставить `ZoneId` для получения даты в конкретном часовом поясе. Этот класс предоставляет такую ​​же функциональность как `java.sql.Date`. Давайте посмотрим на простой пример для его использования:
+
+[source,java]
+----
+import java.time.LocalDate;
+import java.time.Month;
+
+public class Java8Time {
+    public static void main(String[] args) {
+        // Получае текущую дату
+        LocalDate today = LocalDate.now();
+        System.out.println("Текущая дата : " + today);
+
+        //Создадим LocalDate и в качестве аргументов
+        //укажем год месяц и день
+        LocalDate specificDate = LocalDate.of(2017, Month.NOVEMBER, 30);
+        System.out.println("Дата с указанием года, месяца и дня : " + specificDate);
+
+
+        //А теперь попробуей хитрость. Укажем дату с ошибкой
+        //LocalDate invDate = LocalDate.of(2014, Month.JULY, 33);
+        //Но получим исключение java.time.DateTimeException:
+        //Invalid value for DayOfMonth (valid values 1 - 28/31): 33
+
+        //Получаем дату, например с 01.01.1970
+        LocalDate dateFromBase = LocalDate.ofEpochDay(365);
+        System.out.println("Дата с начала отсчета времени : " + dateFromBase);
+
+        LocalDate day256_2017 = LocalDate.ofYearDay(2014, 256);
+        System.out.println("256 день 2017 : " + day256_2017);
+    }
+}
+----
+
+Результат выполнения приведенной выше программы:
+
+[source,java]
+----
+// чтобы увидеть описанные в программе ошибки,
+// просто раскомментируйте строки
+Текущая дата : 2015-11-21
+Дата с указанием года, месяца и дня : 2017-11-30
+Получаем дату через год после 01.01.1970 : 1971-01-01
+256 день 2017 года : 2017-09-13
+----
+
+=== Класс java.time.LocalTime
+
+Класс `LocalTime` является неизменяемым и представляет собой время в читабельном виде. По умолчанию он предоставляет формат `hh:mm:ss.zzz`. Так же, как и `LocalDate`, этот класс обеспечивает поддержку часовых поясов и создание даты, передавая в качестве аргументов часы, минуты и секунды. Давайте посмотрим использование `LocalTime` на примере простой программы:
+
+[source,java]
+----
+import java.time.LocalTime;
+public class LocalTimeTest {
+    public static void main(String[] args) {
+
+        // Получаем текущее время
+        LocalTime time = LocalTime.now();
+        System.out.println("Получаем текущее время : " + time);
+
+        //Создаем LocalTime с использование своих данных в качестве параметров
+        LocalTime specificTime = LocalTime.of(23, 15, 11, 22);
+        System.out.println("Какое-то время дня : " + specificTime);
+
+        //Получаем дату через 2000 секунд после 01.01.1970
+        LocalTime sec2000 = LocalTime.ofSecondOfDay(10000);
+        System.out.println("Через 2000 секунд после 01.01.1970 : " + sec2000);
+    }
+}
+----
+
+Результат выполнения приведенной выше программы:
+
+[source,java]
+----
+Получаем текущее время : 12:17:18.986
+Какое-то время дня : 23:15:11.000000022
+Через 2000 секунд после 01.01.1970 : 02:46:40
+----
+
+=== Пример использования java.time.LocalDateTime
+
+Класс `java.time.LocalDateTime` — представляет собой дату и время в формате по умолчанию: `yyyy-MM-dd-HH-mm-ss.zzz`. Чтобы создать экземпляр `LocalDateTime` есть метод, который принимает `LocalDate` и `LocalTime` в качестве входных аргументов. Давайте посмотрим его использование на простом примере:
+
+[source,java]
+----
+import java.time.*;
+
+public class LocalDateTimeTest {
+    public static void main(String[] args) {
+
+        // Получаем текущее время
+        LocalDateTime today = LocalDateTime.now();
+        System.out.println("Получаем текущее время : " + today);
+
+        //Создаем новую дату с помощью LocalDate и LocalTime
+        today = LocalDateTime.of(LocalDate.now(), LocalTime.now());
+        System.out.println("DateTime : " + today);
+
+        //Создаем LocalDateTime передавая в качестве аргументов
+        //год, месяц, день, час, минуту, сукенду
+        LocalDateTime randDate = LocalDateTime.of(2017, Month.JULY, 9, 11, 6, 22);
+        System.out.println("LocalDateTime с указанной датой : " + randDate);
+
+        //Получаем дату через 2000 секунд после 01.01.1970
+        LocalDateTime dateFromBase = LocalDateTime.ofEpochSecond(2000, 0, ZoneOffset.UTC);
+        System.out.println("Через 2000 секунд после 01.01.1970 : " + dateFromBase);
+
+    }
+
+}
+----
+
+Результат выполнения:
+
+[source,java]
+----
+Получаем текущее время : 2015-11-21T12:48:00.973
+DateTime : 2015-11-21T12:48:00.984
+LocalDateTime с указанной датой : 2017-07-09T11:06:22
+Через 2000 секунд после 01.01.1970 : 1970-01-01T00:33:20
+----
+
+=== Пример использования java.time.Instant
+
+Класс `Instant` используется для работы с машиночитаемым форматом времени — он сохраняет дату и время в так называемый «unix timestamp (отметку времени)». Пример использования ниже:
+
+[source,java]
+----
+import java.time.Duration;
+import java.time.Instant;
+
+public class InstantTest {
+    public static void main(String[] args) {
+        //Текущая отметка времени
+        Instant timestamp = Instant.now();
+        System.out.println("Текущая отметка времени : "+timestamp);
+
+        //Instant для timestamp
+        Instant specificTime = Instant.ofEpochMilli(timestamp.toEpochMilli());
+        System.out.println("Instant для timestamp : " + specificTime);
+
+        //Пример использования Duration
+        Duration sixtyDay = Duration.ofDays(60);
+        System.out.println(sixtyDay);
+    }
+}
+----
+
+Результат:
+
+[source,java]
+----
+Текущая отметка времени : 2015-11-21T11:01:32.610Z
+Instant для timestamp : 2015-11-21T11:01:32.610Z
+PT1440H
+----
+
+=== Пример использования вспомогательных методов Date API
+
+Как упоминалось ранее, работу большинства классов с датой и временем в Java 8 обеспечивают различные вспомогательные методы: прибавить или отнять несколько дней, недель, месяцев и т.д. Есть и другие методы для управления датой с помощью `TemporalAdjuster` и расчета разницы между двумя датами. Смотрим пример использования вспомогательных методов в Java 8 Date API:
+
+[source,java]
+----
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.Period;
+import java.time.temporal.TemporalAdjusters;
+
+public class DateAPITest {
+    public static void main(String[] args) {
+
+        LocalDate today = LocalDate.now();
+
+        //Получаем год, проверям его на высокосность
+        System.out.println("Год " + today.getYear() + " - высокосный? : " + today.isLeapYear());
+
+        //Сравниваем два LocalDate: до и после
+        System.out.println("Сегодня - это полсе 02.03.2017? : " + today.isBefore(LocalDate.of(2017,3,2)));
+
+        //Создаем LocalDateTime с LocalDate
+        System.out.println("Текущее время : " + today.atTime(LocalTime.now()));
+
+        //Операции + и - с датами
+        System.out.println("9 дней после сегодняшнего дня будет: " + today.plusDays(9));
+        System.out.println("3 недели после сегодняшнего дня будет: " + today.plusWeeks(3));
+        System.out.println("20 месяцев после сегодняшнего дня будет: " + today.plusMonths(20));
+
+        System.out.println("9 дней до сегодняшнего дня будет: " + today.minusDays(9));
+        System.out.println("3 недели до сегодняшнего дня будет: " + today.minusWeeks(3));
+        System.out.println("20 месяцев до сегодняшнего дня будет: " + today.minusMonths(20));
+
+        // А теперь поиграемся с датой
+        System.out.println("Первый день этого месяца : " + today.with(TemporalAdjusters.firstDayOfMonth()));
+        LocalDate lastDayOfYear = today.with(TemporalAdjusters.lastDayOfYear());
+        System.out.println("Последний день этой года : " + lastDayOfYear);
+
+        Period period = today.until(lastDayOfYear);
+        System.out.println("Находим время между жвумя датами : "+period);
+        System.out.println("В этом году осталось " + period.getMonths() + " месяц(ев)");
+    }
+}
+----
+
+Результат выполнения:
+
+[source,java]
+----
+Год 2015 - високосный? : false
+Сегодня - это полсе 02.03.2017? : true
+Текущее время : 2015-11-21T13:15:27.839
+9 дней после сегодняшнего дня будет: 2015-11-30
+3 недели после сегодняшнего дня будет: 2015-12-12
+20 месяцев после сегодняшнего дня будет: 2017-07-21
+9 дней до сегодняшнего дня будет: 2015-11-12
+3 недели до сегодняшнего дня будет: 2015-10-31
+20 месяцев до сегодняшнего дня будет: 2014-03-21
+Первый день этого месяца : 2015-11-01
+Последний день этой года : 2015-12-31
+Находим время между жвумя датами : P1M10D
+В этом году осталось 1 месяц(ев)
+----
+
+=== Пример парсинга и форматирование даты
+
+Давайте посмотрим пример парсинга и форматирования даты:
+
+[source,java]
+----
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+public class DateParseFormaеTest {
+    public static void main(String[] args) {
+
+        LocalDate date = LocalDate.now();
+        // стандартный формат даты
+        System.out.println("стандартный формат даты для LocalDate : " + date);
+        // приименяем свой формат даты
+        System.out.println(date.format(DateTimeFormatter.ofPattern("d::MMM::uuuu")));
+        System.out.println(date.format(DateTimeFormatter.BASIC_ISO_DATE));
+
+
+        LocalDateTime dateTime = LocalDateTime.now();
+        //стандартный формат даты
+        System.out.println("стандартный формат даты LocalDateTime : " + dateTime);
+        //приименяем свой формат даты
+        System.out.println(dateTime.format(DateTimeFormatter.ofPattern("d::MMM::uuuu HH::mm::ss")));
+        System.out.println(dateTime.format(DateTimeFormatter.BASIC_ISO_DATE));
+
+        Instant timestamp = Instant.now();
+        //стандартный формат даты
+        System.out.println("стандартный формат : " + timestamp);
+    }
+}
+----
+
+Вот результат:
+
+[source,java]
+----
+стандартный формат даты для LocalDate : 2015-11-21
+21::ноя::2015
+20151121
+стандартный формат даты LocalDateTime : 2015-11-21T13:48:50.023
+21::ноя::2015 13::48::50
+20151121
+стандартный формат : 2015-11-21T11:48:50.024Z
+----
+
+Вот и все нововведения в Date Time API Java 8. Из всего вышеперечисленного можно смело делать вывод, что API удался: стал намного удобнее и понятнее. Я думаю, что с таким Date Time API многие откажутся от использование сторонних библиотек для работы со временем и датой.
+

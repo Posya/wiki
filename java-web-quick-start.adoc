@@ -1,0 +1,653 @@
+= Java Web Quick Start
+Doc Writer <pavel.kiselev@gmail.com>
+v1.0
+:toc:
+
+
+https://newfivefour.com/category_java-web-quick-start.html[original]
+
+
+== PART 1: Quick start a RESTful project with Jersey, Jetty and Gradle
+
+Make the project directory and the directory structure for Gradle:
+
+[source,sh]
+----
+mkdir YOUR_PROJECT_DIR && cd YOUR_PROJECT_DIR
+mkdir -p {src/main/java/com/example/YOURPROJECT/,src/main/resources/META-INF,src/main/webapp/WEB-INF,logs}
+----
+
+Next create the Gradle build file, including the war and eclipse plugins, and the logging, jersey and jersey json jars.
+
+[source,sh]
+----
+echo "
+apply plugin: 'war'
+apply plugin: 'eclipse'
+
+repositories {
+    mavenCentral()
+    // Below needed in later tutorials
+    maven {
+        url 'http://download.eclipse.org/rt/eclipselink/maven.repo'
+    }
+}
+
+dependencies {
+    compile 'log4j:log4j:1.2.7'
+    compile 'org.slf4j:slf4j-log4j12:1.6.6'
+    compile 'org.glassfish.jersey.containers:jersey-container-servlet:2.6'
+    // Following aren't needed atm, but will be in later parts.
+    compile 'org.glassfish.jersey.media:jersey-media-json-jackson:2.6'
+    compile 'org.eclipse.jetty:jetty-jsp:9.1.0.M0'
+    compile 'postgresql:postgresql:9.1-901-1.jdbc4'
+    compile 'org.eclipse.persistence:eclipselink:2.4.0'
+}" > build.gradle
+----
+
+Next create the log4j.properties file.
+
+[source,sh]
+----
+echo "
+log4j.rootCategory=INFO, rollingFile
+
+log4j.appender.rollingFile=org.apache.log4j.RollingFileAppender
+log4j.appender.rollingFile.File=logs/YOUR_LOG_FILE.log
+log4j.appender.rollingFile.MaxFileSize=10MB
+log4j.appender.rollingFile.MaxBackupIndex=2
+log4j.appender.rollingFile.layout = org.apache.log4j.PatternLayout
+log4j.appender.rollingFile.layout.ConversionPattern=%d{yyyy-MM-dd HH-mm-ss} %-5p [%t] %c %x - %m%n
+" > src/main/resources/log4j.properties
+----
+
+Next create the `web.xml` file starting Jersey by pointing to a yet-to-be-created application class, specifying the package where the request classes will live, and defining a path for the REST calls.
+
+[source,sh]
+----
+echo '
+<web-app xmlns="http://java.sun.com/xml/ns/j2ee" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee http://java.sun.com/xml/ns/j2ee/web-app_2_4.xsd"
+    version="2.4">
+
+    <display-name>YOUR_SERVICE</display-name>
+
+    <servlet>
+       <servlet-name>YOUR_SERVLET_NAME</servlet-name>
+       <servlet-class>org.glassfish.jersey.servlet.ServletContainer</servlet-class>
+        <init-param>
+            <param-name>javax.ws.rs.Application</param-name>
+            <param-value>com.example.YOURPROJECT.JerseyApplication</param-value>
+        </init-param>
+        <init-param>
+           <param-name>jersey.config.server.provider.packages</param-name>
+         <param-value>com.example.YOURPROJECT</param-value>
+        </init-param>
+        <load-on-startup>1</load-on-startup>
+    </servlet>
+    <servlet-mapping>
+       <servlet-name>YOUR_SERVLET_NAME</servlet-name>
+       <url-pattern>/YOUR_PATH/*</url-pattern>
+    </servlet-mapping>
+
+</web-app>
+' > src/main/webapp/WEB-INF/web.xml
+----
+
+Now create that `JerseyApplication` file we referred to. (Specifying the JerseyApplication isn’t strictly necessary, nor is registering Jackson for this setup, but if we’re using JSON later on, it will be)
+
+[source,sh]
+----
+echo "
+package com.example.YOURPROJECT;
+
+import org.glassfish.jersey.jackson.JacksonFeature;
+import org.glassfish.jersey.server.ResourceConfig;
+
+public class JerseyApplication extends ResourceConfig {
+    public JerseyApplication() {
+       register(JacksonFeature.class);
+    }
+}
+
+" > src/main/java/com/example/YOURPROJECT/JerseyApplication.java
+----
+
+Now create a simple Jersey request.
+
+[source,sh]
+----
+echo '
+package com.example.YOURPROJECT;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.apache.log4j.Logger;
+
+@Path("example")
+public class ExampleRequest {
+
+    @Path("{example}")
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public String example(@PathParam("example") String example) {
+       Logger.getLogger(getClass()).info("Working???");
+       return example + "!!!!";
+    }
+
+}
+' > src/main/java/com/example/YOURPROJECT/ExampleRequest.java
+----
+
+Build the project, which creates a WAR file, download the jetty runner, and then use the runner to run the WAR on port 8081.
+
+[source,sh]
+----
+gradle build
+wget http://repo1.maven.org/maven2/org/eclipse/jetty/jetty-runner/9.1.0.M0/jetty-runner-9.1.0.M0.jar
+java -jar jetty-runner-9.1.0.M0.jar --port 8081 build/libs/YOUR_PROJECT_DIR.war
+----
+
+Now you should be able envoke the request you defined earlier by visiting its url (and check the log file after you do so).
+
+http://localhost:8081/YOUR_PATH/example/some_text
+
+If you want to use this project in Eclipse, run ‘gradle eclipse’ and import the project into Eclipse.
+
+== PART 2: Using JSON with Jersey 2
+
+We previously included the import in our `build.gradle`
+
+[source,sh]
+----
+compile 'org.glassfish.jersey.media:jersey-media-json-jackson:2.6'
+----
+
+And created a `JerseyApplication` that had the line
+
+[source,java]
+----
+register(JacksonFeature.class);
+----
+
+This allows use to use JSON via the Jackson library with Jersey.
+
+Now create a POJO which we’ll use for transmitting the JSON. (Note the @XMLRootElement annotation which means it’ll be serialised, into JSON in our case).
+
+[source,sh]
+----
+echo '
+package com.example.YOURPROJECT;
+
+import javax.xml.bind.annotation.XmlRootElement;
+
+@XmlRootElement
+public class ExampleResource {
+
+    private String stuff;
+
+    public String getStuff() {
+       return stuff;
+    }
+
+    public void setStuff(String stuff) {
+       this.stuff = stuff;
+    }
+
+}
+' > src/main/java/com/example/YOURPROJECT/ExampleResource.java
+----
+
+Now let’s create a new request that will return an array of these objects.
+
+[source,sh]
+----
+echo '
+package com.example.YOURPROJECT;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("example_json")
+public class ExampleJSONRequest {
+
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public List<ExampleResource> example() {
+        ArrayList<ExampleResource> resList = new ArrayList<ExampleResource>();
+        ExampleResource exampleItem = new ExampleResource();
+        exampleItem.setStuff("Some stuff");
+        resList.add(exampleItem);
+        ExampleResource exampleItem1 = new ExampleResource();
+        exampleItem1.setStuff("Some more stuff");
+        resList.add(exampleItem1);
+        return resList;
+    }
+}
+' > src/main/java/com/example/YOURPROJECT/ExampleJSONRequest.java
+----
+
+The differences from our previous request are that the `@Path` has changed, we’re not longer concerned about a `@PathParam`, and the `@Produces` method now says we’re returning JSON, not plain text.
+
+Let’s now build it, run it and look at the response.
+
+[source,sh]
+----
+gradle build
+java -jar jetty-runner-9.1.0.M0.jar --port 8081 build/libs/YOUR_PROJECT_DIR.war
+----
+
+Then if you go to the url below you will see `[{“stuff”:“Some stuff”},{“stuff”:“Some more stuff”}]`
+
+[source,sh]
+----
+http://localhost:8081/YOUR_PATH/example_json
+----
+
+== PART 3: Using JPA and Postgresql in your application
+
+Previously, in our `build.gradle` file we included these jars to allow us to talk to a Postgresql database through JPA.
+
+[source]
+----
+compile 'postgresql:postgresql:9.1-901-1.jdbc4'
+compile 'org.eclipse.persistence:eclipselink:2.4.0'
+----
+
+We needed the eclipse link repository for that.
+
+[source]
+----
+repositories {
+    maven {
+        url 'http://download.eclipse.org/rt/eclipselink/maven.repo'
+    }
+    ...
+}
+----
+
+Now we need to create a Postgresql database user and database to talk to. We’d normally set this up in the environment somehow before running the project.
+
+[source,postgress]
+----
+(as root)
+su - postgres
+psql -c "create user test_username password 'test_password';"
+psql -c "create database test_database owner test_username"
+(logout from postgres and root)
+----
+
+Now we can create the persistence.xml file that tells JPA how to connect to our database. (Ensure there’s no whitespace at the start of the file)
+
+[source]
+----
+echo '<?xml version="1.0" encoding="UTF-8" ?>
+<persistence xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://java.sun.com/xml/ns/persistence http://java.sun.com/xml/ns/persistence/persistence_2_0.xsd"
+  version="2.0" xmlns="http://java.sun.com/xml/ns/persistence">
+  <persistence-unit name="PERSISTENCE_UNIT_NAME" transaction-type="RESOURCE_LOCAL">
+    <mapping-file>META-INF/mapping.xml</mapping-file>
+    <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
+      <properties>
+      <property name="javax.persistence.jdbc.url" value="jdbc:postgresql://localhost:5432/test_database" />
+      <property name="javax.persistence.jdbc.driver" value="org.postgresql.Driver" />
+      <property name="javax.persistence.jdbc.user" value="test_username" />
+      <property name="javax.persistence.jdbc.password" value="test_password" />
+      <property name="eclipselink.logging.level" value="ALL" />
+       </properties>
+     </persistence-unit>
+</persistence>
+' > src/main/resources/META-INF/persistence.xml
+----
+
+This is doing a couple of things
+
+- Naming the persistence-unit which we’ll use when we come to initialise JPA
+- Makeing our database transactions will be local to this machine
+- Saying there’s a mapping file in META-INF/mapping.xml that maps our Objects to the database
+- Saying we’re using EclipseList for the persistence provider
+- Pointing JPA to our database
+- Providing the username and password to that database
+- Making EclipseLink log everything
+
+Next we’ll create a simple Object, or Entity, which we’ll persist in the database. It’s just a POJO.
+
+[source]
+----
+echo '
+package com.example.YOURPROJECT;
+
+public class ExampleEntity {
+
+    private long id;
+    private String talky;
+
+    public String getTalky() {
+       return talky;
+    }
+    public void setTalky(String talky) {
+       this.talky = talky;
+    }
+    public long getId() {
+       return id;
+    }
+    public void setId(long id) {
+       this.id = id;
+    }
+
+}
+' > src/main/java/com/example/YOURPROJECT/ExampleEntity.java
+----
+
+We could use annotations on the object to map it to the database, and leave JPA to sort out the tables etc, but that always leads to pain.
+
+So we’re creating the mapping.xml file we referred to earlier. (Ensure there’s no whitespace at the start of the file)
+
+[source]
+----
+echo '<?xml version="1.0" encoding="UTF-8" ?>
+<entity-mappings xmlns="http://java.sun.com/xml/ns/persistence/orm"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://java.sun.com/xml/ns/persistence/orm
+  http://java.sun.com/xml/ns/persistence/orm_2_0.xsd"
+  version="2.0">
+    <entity class="com.example.YOURPROJECT.ExampleEntity">
+      <table name="example" />
+      <named-query name="list">
+        <query>select p from ExampleEntity p</query>
+      </named-query>
+      <attributes>
+        <id name="id">
+          <generated-value strategy="auto" />
+        </id>
+        <basic name="talky">
+          <column name="talky" nullable="false"/>
+        </basic>
+      </attributes>
+    </entity>
+</entity-mappings>
+' > src/main/resources/META-INF/mapping.xml
+----
+
+This is saying:
+
+- Specifying the entity you created above
+- Specifying the database table where this entity lives
+- Creating a named query called ‘list’ that lists all the entities
+- Defining an primary key id attribute, relating to ‘id’ in entity, that is an automatically generated value in the database, using the AUTO strategy (see http://www.objectdb.com/java/jpa/entity/generated)
+- Defining an talky attribute, relating to ‘talky’ in the entity, which is the ‘talky’ column in the database which cannot be null.
+
+We’d normally use a database migration to ensure the table ‘example’ above exists, but in our case here, let’s just create it in the database directly. We’re also creating a sequence table so JPA can create unique primary keys.
+
+[source]
+----
+psql -h localhost -U test_username -d test_database -c "create table example (id bigserial not null primary key, talky varchar(1000) not null);"
+psql -h localhost -U test_username -d test_database -c "create table sequence (seq_name varchar(50) not null primary key, seq_count int);insert into sequence (seq_name, seq_count) values('SEQ_GEN', 1);"
+----
+
+Now let’s create a new request that create a JPA connections, add something to our database and lists everything in it to return.
+
+The comments should example the basics of JPA and EntityManagers.
+
+[source]
+----
+echo '
+package com.example.YOURPROJECT;
+
+import java.util.ArrayList;
+import java.util.List;
+import javax.persistence.EntityManager;
+import javax.persistence.EntityTransaction;
+import javax.persistence.Persistence;
+import javax.persistence.TypedQuery;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import org.apache.log4j.Logger;
+
+@Path("example_jpa")
+public class ExampleJPARequest {
+
+    @Path("{example}")
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public List<ExampleResource> example(@PathParam("example") String example) {
+       // Get the EntityManager by creating an EntityManagerFactory via the persistence-unit name we provided.
+       EntityManager entityManager = Persistence.createEntityManagerFactory("PERSISTENCE_UNIT_NAME").createEntityManager();
+       EntityTransaction transaction = entityManager.getTransaction(); // Not useful here, but useful to see
+       List<ExampleEntity> list  = null;
+       try {
+         transaction.begin();
+         // Add an entity
+         ExampleEntity entity = new ExampleEntity();
+         entity.setTalky(example);
+         entityManager.persist(entity);
+         // List entities, via the named query we defined in mapping.xml
+         TypedQuery<ExampleEntity> nq = entityManager.createNamedQuery("list", ExampleEntity.class);
+         list = nq.getResultList();
+         // Commit the transaction
+         transaction.commit();
+       } catch (Exception e) {
+         Logger.getLogger(getClass()).error("Problem persisting", e);
+         transaction.rollback();
+         throw e; // Ergo showing a 500 error. You may want to throw an exception that is not detailing stuff about your JPA connection
+       } finally {
+         entityManager.clear(); // Clears all the entities from the EntityManager
+         entityManager.close();
+       }
+
+       // Adapt the entities into objects to return as JSON
+       ArrayList<ExampleResource> resList = new ArrayList<ExampleResource>();
+       for (ExampleEntity exampleEntity : list) {
+         ExampleResource exampleItem = new ExampleResource();
+         exampleItem.setStuff(exampleEntity.getTalky());
+         resList.add(exampleItem);
+       }
+       return resList;
+    }
+}
+' > src/main/java/com/example/YOURPROJECT/ExampleJPARequest.java
+----
+
+You should normally separate the database layer and entity adapters from the request layer, which can do nicely with Jersey’s dependency injection, whic we’ll come to later.
+
+We can again run the project to see it in action:
+
+[source]
+----
+gradle build
+java -jar jetty-runner-9.1.0.M0.jar --port 8081 build/libs/YOUR_PROJECT_DIR.war
+----
+
+If you visit `http://localhost:8081/YOUR_PATH/example_jpa/ONE` and then visit `http://localhost:8081/YOUR_PATH/example_jpa/TWO` You should see the JSON
+
+[source,json]
+----
+[{"stuff":"ONE"},{"stuff":"TWO"}]
+----
+
+== PART 4: Jersey 2 and Dependency Injection with HK2
+
+Previously, we had the JPA and adapter code in the request object. This was obviously not ideal.
+
+Jersey 2 comes with a JSR330 (dependency injection) implementation baked in, named HK2, so we can move the JPA model code and the adapter code into separate objects and inject them in.
+
+Let’s start with a simple object that will adapt the list of JPA entities into a resource entities (same code as before).
+
+[source]
+----
+echo '
+package com.example.YOURPROJECT;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class ExampleResourcesAdapter {
+
+    public List<ExampleResource> adapt(List<ExampleEntity> list) {
+       ArrayList<ExampleResource> resList = new ArrayList<ExampleResource>();
+       for (ExampleEntity exampleEExntity : list) {
+         ExampleResource exampleItem = new ExampleResource();
+         exampleItem.setStuff(exampleEntity.getTalky());
+         resList.add(exampleItem);
+       }
+       return resList;
+    }
+
+}
+' > src/main/java/com/example/YOURPACKAGE/ExampleResourcesAdapter.java
+----
+
+Now let’s move the JPA stuff into its own model. In this case we’re also using an interface, although we don’t have to for the DI to work. (Same JPA code as before, but without the comments)
+
+[source]
+----
+echo '
+package com.example.YOURPROJECT;
+
+import java.util.List;
+
+public interface AddListModel {
+    List<ExampleEntity> addAndList(String someString);
+}
+' > src/main/java/com/example/YOURPACKAGE/AddListModel.java
+----
+
+And now for the implementation of the interface.
+
+[source]
+----
+echo '
+package com.example.YOURPROJECT;
+
+import java.util.List;
+
+import javax.persistence.EntityManager;
+import javax.persistence.EntityTransaction;
+import javax.persistence.Persistence;
+import javax.persistence.TypedQuery;
+
+import org.apache.log4j.Logger;
+
+public class AddListModelImpl implements AddListModel {
+
+    @Override
+    public List<ExampleEntity> addAndList(String someString) {
+       EntityManager entityManager = Persistence.createEntityManagerFactory("PERSISTENCE_UNIT_NAME").createEntityManager();
+       EntityTransaction transaction = entityManager.getTransaction();
+       List<ExampleEntity> list = null;
+       try {
+         transaction.begin();
+         ExampleEntity entity = new ExampleEntity();
+         entity.setTalky(someString);
+         entityManager.persist(entity);
+         TypedQuery<ExampleEntity> nq = entityManager.createNamedQuery("list", ExampleEntity.class);
+         list = nq.getResultList();
+         transaction.commit();
+       } catch (Exception e) {
+         Logger.getLogger(getClass()).error("Problem persisting", e);
+         transaction.rollback();
+         throw e;
+       } finally {
+         entityManager.clear();
+         entityManager.close();
+       }
+       return list;
+    }
+
+}
+' > src/main/java/com/example/YOURPACKAGE/AddListModelImpl.java
+----
+
+Now we have these objects, we need to tell the dependency injector about them. We do this using a AbstractBinder class.
+
+(I think there’s an automatic method for this, using annotations, but this is the only way I’ve got working.)
+
+[source]
+----
+echo '
+package com.example.YOURPROJECT;
+
+import org.glassfish.hk2.utilities.binding.AbstractBinder;
+
+public class DependencyBinder extends AbstractBinder {
+
+    @Override
+    protected void configure() {
+       bind(AddListModelImpl.class).to(AddListModel.class);
+       bind(ExampleResourcesAdapter.class).to(ExampleResourcesAdapter.class);
+    }
+
+}
+' > src/main/java/com/example/YOURPACKAGE/DependencyBinder.java
+----
+
+Note we’re binding the iplementatioon of the model interface on the first bind line. And on the second just binding two concreate classes together.
+
+We need to tell Jersey about this AbstractBinder, so in your JerseyApplication.java class you need to register it:
+
+[source,java]
+----
+register(new DependencyBinder());
+----
+
+Now we can see the new request has two `@Inject` lines and is much, much shorter (also has a new `@Path`)
+
+[source]
+----
+echo '
+package com.example.YOURPROJECT;
+
+import java.util.List;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("example_jpa_di")
+public class ExampleJPAWithDIRequest {
+
+    @Inject AddListModel mModel;
+    @Inject ExampleResourcesAdapter mAdapter;
+
+    @Path("{example}")
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public List<ExampleResource> example(@PathParam("example") String example) {
+       List<ExampleEntity> list = mModel.addAndList(example);
+       List<ExampleResource> resList = mAdapter.adapt(list);
+       return resList;
+    }
+}
+' > src/main/java/com/example/YOURPACKAGE/ExampleJPAWithDIRequeset.java
+----
+
+We can run it, and it’ll have the same result as before (note the different url for the request)
+
+[source]
+----
+gradle build
+java -jar jetty-runner-9.1.0.M0.jar --port 8081 build/libs/YOUR_PROJECT_DIR.war
+----
+
+If you visit `http://localhost:8081/YOUR_PATH/example_jpa_di/ONE` and then visit `http://localhost:8081/YOUR_PATH/example_jpa_di/TWO` you should see the JSON, (should the database be blank before starting)
+
+[source,json]
+----
+[{"stuff":"ONE"},{"stuff":"TWO"}]
+----
+
