@@ -1,0 +1,41 @@
+= JavaBeans vs Spring beans vs POJOs
+
+The terms JavaBeans, “Spring beans” and POJOs are in widespread use and this article discusses each and the differences between them.
+
+== JavaBeans
+
+At a basic level, `JavaBeans` are simply Java classes which adhere to certain coding conventions. For example, classes that
+
+- Have a public default (no argument) constructor
+- allows access to properties using accessor (getter and setter) methods
+- Implement `java.io.Serializable`
+
+More accurately, JavaBeans are classes that adhere to `Sun’s JavaBeans spec`, first published way back in 1996. A JavaBean was defined as a “software component model” for Java. The idea was that JavaBeans would be reusable software components that could be manipulated visually in a builder tool and that vendors would create and sell JavaBeans that could be composed together into applications by end users. The three most important features of a Java Bean are
+
+- the set of properties (named attributes) it exposes
+- the set of methods it allows other components to call
+- the set of events it fires (to notify registered listeners of changes)
+
+== POJO
+
+`POJO` is an acronym for `Plain Old Java Object`. The term was coined by Martin Fowler et. al., as a ‘fancy’ way to describe ordinary Java Objects that do not require a framework to use, nor need to be run in a application server environment. It is often used to distinguish simpler, lightweight Java objects from ‘heavyweight’ code like `EJBs`. The use of these kind of lightweight objects in programming is described in books such as “POJOs in Action” and advocated by frameworks like Spring.
+
+== Spring beans
+
+A Spring bean is basically an object managed by Spring. More specifically, it is an object that is instantiated, configured and otherwise managed by a Spring Framework container. Spring beans are defined in a Spring configuration file (or, more recently, by using annotations), instantiated by the Spring container, and then injected into your application.
+
+The reason Spring managed objects are referred to as beans is because in the very early versions, Spring was intended only for use with JavaBeans. That is no longer the case of course: Spring can manage just about any object, even if it doesn’t have JavaBean type characteristics such as default constructors or mutator methods (getters and setters). None the less, the term ‘Spring beans’ has stuck.
+
+Can Spring beans be POJOs? Yes, and they usually are (although they don’t have to be – e.g. Spring can be used with ‘heavyweight’ Java objects, such as EJBs).
+
+Can Spring beans be JavaBeans? As I have said, yes and again they often are but don’t have to be.
+
+== Summary
+
+Although it have been well over 10 years since the JavaBeans spec was first published, it still carries weight and has influence the development of modern frameworks such as Spring. But while Java objects that have default constructor and use accessor methods for private fields may legitimately be called JavaBeans, the whole “reusable software component that can be manipulated visually in a builder tool” concept isn’t particularly popular anymore.
+
+POJOs, however, are everywhere and the a backlash against the complexities for EJBs has resulted in widespread use of ‘lightweight’ Java programming.
+
+Spring beans are objects created and managed by the Spring framework.
+
+None of the 3 terms discussed are mutually exclusive. A Java object can be a JavaBean, a POJO and a Spring bean all at the same time.

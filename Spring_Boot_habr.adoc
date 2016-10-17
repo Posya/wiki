@@ -1,0 +1,764 @@
+4 мая 2015 в 14:05
+
+= Разработка → Spring Boot: от начала до продакшена tutorial
+
+В данной статье я попробую расписать все шаги, которые потребуются для создания небольшого проекта на `Spring Boot` и развертывания его на боевом сервере.
+
+Не будем тянуть долгими прелюдиями о философии java и spring'а, и сразу приступим к делу.
+
+Для начала нам необходимо создать каркас приложения, внедрив туда весь необходимый зоопарк технологий(как минимум `Spring`, `JPA`, `JDBC`). До появления spring boot нужно было потратить на это немало времени, если конечно у вас не было рабочей заготовки в закромах кода. И именно сложность создания подобного каркаса, как мне кажется, останавливает многих от разработки небольших веб-проектов на java. Конечно, когда-то был хромой spring roo, который мог создать подобный каркас в ущерб производительности(привет аспектам), но даже с ним количество и сложность конфигурационных файлов заставляли долго медитировать над ними неподготовленного разработчика. Однако теперь с приходом Boot и Spring 4 жизнь стала немного проще и количество конфигурационных файлов заметно уменьшилось.
+
+Итак, каркас, да.
+
+Если у вас есть `Intellij Idea 14.1`, то проблем с каркасом возникнуть вообще не должно, можно все сделать через специальный мастер создания проектов(`File-New-Project...-Spring Initializr`). Далее останется только указать названия проектов, выбрать интересующие нас технологии(`Web`, `JDBC`, `JPA`, `PostgreSQL`) и создать проект.
+
+Если же у вас нет данной IDE, то скачиваем http://repo.spring.io/release/org/springframework/boot/spring-boot-cli/1.2.3.RELEASE/spring-boot-cli-1.2.3.RELEASE-bin.zip[Spring Boot CLI], следуем инструкции в `INSTALL.txt`. Нужно задать системную переменную `SPRING_HOME`(путь к папке со Spring Boot, не к папке bin!) и добавить путь к `SPRING_HOME/bin` в системную переменную `PATH` на windows.
+
+Итак, консоль спринга настроили, теперь самое время создать проект. Сделать это можно следующей командой:
+
+[source,java]
+----
+spring init --dependencies=web,data-jpa,jdbc yourapp
+----
+
+*UPDATE*
+
+Кроме того, как написали в комментариях, существует еще веб-конструктор: `start.spring.io`
+
+Далее импортируем получившийся каркас в любимую IDE и начинаем его модифицировать под наши нужды.
+
+Для начала добавим в каталог `src/main` папку `webapps`. Все веб-ресурсы мы будем создавать в ней, а не в папке `resources`, как хочет того спринг. Дело в том, что если мы будем создавать файлы в папке `resources`, то тогда мы лишимся возможности видеть изменения, сделанные в наших веб-ресурсах, без перезагрузки сервера. А это может быть неприятно, когда ради того, чтобы посмотреть изменившийся текст на веб-странице приходится перезапускать веб-сервер.
+
+Теперь в папке webapps создаем файл `index.html` и папки `css`, `js`, `font`, `images`, в которые будем класть соответствующие ресурсы.
+
+Для примера сделаем самый простой каркас `index.html`:
+
+[source,html]
+----
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Yourapp</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+</head>
+<body>
+     <h1> HELLO WORLD </h1>
+</body>
+</html>
+----
+
+Изменим файл `pom.xml`
+
+Должно получиться что-то подобное:
+
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+     <modelVersion>4.0.0</modelVersion>
+
+     <groupId>com.yourcompany</groupId>
+     <artifactId>yourapp</artifactId>
+     <version>0.0.1-SNAPSHOT</version>
+     <packaging>jar</packaging>
+
+     <name>YourApp</name>
+     <description></description>
+
+     <parent>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-parent</artifactId>
+          <version>1.2.3.RELEASE</version>
+          <relativePath/> <!-- lookup parent from repository -->
+     </parent>
+
+     <properties>
+          <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+          <start-class>com.yourcompany.Application</start-class>
+          <java.version>1.8</java.version>
+     </properties>
+
+     <dependencies>
+          <dependency>
+               <groupId>org.springframework.boot</groupId>
+               <artifactId>spring-boot-starter-web</artifactId>
+          </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>9.4-1201-jdbc41</version>
+            <scope>runtime</scope>
+        </dependency>
+          <dependency>
+               <groupId>org.springframework.boot</groupId>
+               <artifactId>spring-boot-starter-test</artifactId>
+               <scope>test</scope>
+          </dependency>
+     </dependencies>
+
+     <build>
+          <plugins>
+               <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+               </plugin>
+            <plugin>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>2.6</version>
+                <executions>
+                    <execution>
+                        <id>copy-resources</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${basedir}/target/classes/static</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>src/main/webapp</directory>
+                                    <filtering>true</filtering>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+          </plugins>
+     </build>
+
+</project>
+----
+
+
+Из pom-файла мы можем увидеть следующее:
+
+- Мы используем `java 8`(самое время ее попробовать).
+- Наш класс приложения называется `com.yourcompany.Application`(не забудьте переименовать стандартно сгенерированный класс, который может называться к примеру `DemoApplication`).
+- Мы используем `postgresql 9.4`(тоже неплохо бы установить его локально на свою машину).
+- Connection `pool` для взаимодействия с базой данных мы берем самый модный и производительный (`HikariCP`).
+- Кроме того, мы используем специальный плагин, который, когда мы будем генерировать итоговый jar'ник, перенесет все наши данные из `webapp` в `resources/static`, как того хочет `spring boot`. В противном случае вы не сможете увидеть все те веб-страницы, что создадите в папке `webapps`, когда запустите jar-ник.
+
+Добавим пакет `config` и создадим в нем класс `JpaConfig`:
+
+[source,java]
+----
+@Configuration
+@EnableTransactionManagement
+@EnableJpaRepositories(basePackageClasses = Application.class)
+public class JpaConfig implements TransactionManagementConfigurer {
+
+    @Value("${dataSource.driverClassName}")
+    private String driver;
+    @Value("${dataSource.url}")
+    private String url;
+    @Value("${dataSource.username}")
+    private String username;
+    @Value("${dataSource.password}")
+    private String password;
+    @Value("${hibernate.dialect}")
+    private String dialect;
+    @Value("${hibernate.hbm2ddl.auto}")
+    private String hbm2ddlAuto;
+
+
+    @Bean
+    public DataSource configureDataSource() {
+        HikariConfig config = new HikariConfig();
+        config.setDriverClassName(driver);
+        config.setJdbcUrl(url);
+        config.setUsername(username);
+        config.setPassword(password);
+
+        return new HikariDataSource(config);
+    }
+
+    @Bean
+    public LocalContainerEntityManagerFactoryBean configureEntityManagerFactory() {
+        LocalContainerEntityManagerFactoryBean entityManagerFactoryBean = new LocalContainerEntityManagerFactoryBean();
+        entityManagerFactoryBean.setDataSource(configureDataSource());
+        entityManagerFactoryBean.setPackagesToScan("com.yourcompany");
+        entityManagerFactoryBean.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
+
+        Properties jpaProperties = new Properties();
+        jpaProperties.put(org.hibernate.cfg.Environment.DIALECT, dialect);
+        jpaProperties.put(org.hibernate.cfg.Environment.HBM2DDL_AUTO, hbm2ddlAuto);
+        entityManagerFactoryBean.setJpaProperties(jpaProperties);
+
+        return entityManagerFactoryBean;
+    }
+
+    @Bean
+    public PlatformTransactionManager annotationDrivenTransactionManager() {
+        return new JpaTransactionManager();
+    }
+
+}
+----
+
+Кроме того, добавим в файл `application.properties` следующие строчки:
+
+[source,java]
+----
+dataSource.driverClassName=org.postgresql.Driver
+dataSource.url=jdbc:postgresql://<ip-адрес сервера, где установлен PostgreSQL>:5432/yourapp_data
+dataSource.username=postgres
+dataSource.password=
+hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+hibernate.hbm2ddl.auto=update
+----
+
+И наконец в `Application.java` меняем строку инициализации на следующую:
+
+[source,java]
+----
+SpringApplication.run(new Class<?>[] {Application.class, JpaConfig.class}, args);
+----
+
+Тем самым мы настроили подключение к `СУБД PostgreSQL`.
+
+Не забываем создать саму базу данных и простенькую таблицу в ней. Сделать это удобнее всего через `PgAdmin`.
+Создав в ней пустую базу `yourapp_data`, выполняем скрипт создания таблицы:
+
+[source,sql]
+----
+CREATE TABLE yourapp_data
+(
+  data_id uuid NOT NULL,
+  data_description character varying(100) NOT NULL,
+  CONSTRAINT yourapp_data_pk PRIMARY KEY (data_id)
+)
+WITH (
+  OIDS=FALSE
+);
+ALTER TABLE yourapp_data
+  OWNER TO postgres;
+----
+
+Теперь настало время немного заняться начинкой нашего проекта. А именно добавить какую-нибудь сущность БД и научиться с ней работать, получая с клиента данные для ее формирования и отправляя клиенту же данные об уже созданных сущностях.
+
+Создаем пакеты `controller`, `entity`, `repository`, `service`, `utils`.
+
+В пакете `entity` создаем интерфейс:
+
+[source,java]
+----
+public interface DomainObject extends Serializable {
+}
+----
+
+и сущность:
+
+[source,java]
+----
+public class Data implements DomainObject {
+
+    private UUID id;
+    private String description;
+
+    public Data(UUID id, String description) {
+        this.id = id;
+        this.description = description;
+    }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public void setId(UUID id) {
+        this.id = id;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+}
+----
+
+Аннотации `JPA` и `Hibernate` в данном примере использовать не будем, так как эти технологии сильно замедляют работу(запрос может выполняться в 10 раз медленнее, чем на чистом `jdbc`), а так как у нас нет сильно сложных сущностей, для которых реально может потребоваться `ORM`, то воспользуемся обычным `jdbcTemplate`.
+
+Создаем интерфейс репозитория:
+
+[source,java]
+----
+public interface DataRepository<V extends DomainObject> {
+
+    void persist(V object);
+
+    void delete(V object);
+
+    Set<String> getRandomData();
+
+}
+----
+
+И его реализацию:
+
+[source,java]
+----
+@org.springframework.stereotype.Repository("dataRespitory")
+public class DataRepositoryImpl implements DataRepository<Data> {
+
+    @Autowired
+    protected JdbcOperations jdbcOperations;
+
+    @Override
+    public void persist(Data object) {
+
+        Object[] params = new Object[] { object.getId(), object.getDescription() };
+        int[] types = new int[] { Types.VARCHAR, Types.VARCHAR };
+
+        jdbcOperations.update("INSERT INTO yourapp_data(\n" +
+                "            data_id, data_description)\n" +
+                "    VALUES (cast(? as UUID), ?);", params, types);
+    }
+
+    @Override
+    public void delete(Data object) {
+        jdbcOperations.update("DELETE FROM yourapp_data\n" +
+                " WHERE data_id = '" + object.getId().toString() + "';");
+    }
+
+    @Override
+    public Set<String> getRandomData() {
+        Set<String> result = new HashSet<>();
+        SqlRowSet rowSet = jdbcOperations.queryForRowSet("SELECT data_description FROM yourapp_data p ORDER BY RANDOM() LIMIT 50;");
+        while (rowSet.next()) {
+            result.add(rowSet.getString("data_description"));
+        }
+        return result;
+    }
+
+
+}
+----
+
+Вместо уже упомянутого `jdbcTemplate`, мы, как видите, используем `JdbcOperations`, который является его интерфейсом. Нам приходится использовать везде интерфейсы, отделяя их от реализации, так как, во-первых это стильно, модно, молодежно, а во-вторых, `spring` в нашем случае использует стандартный jdk'шный Proxy для наших объектов, поэтому напрямую инжектить реализацию не получиться, пока мы не введем полноценные аспекты и `AspectJ` compile-time weaving. В нашем случае этого и не требуется, чтобы не перегружать приложение.
+
+Осталось уже немного. Создаем наш сервис(мы же хорошие разработчики и должны отделить бизнес-логику от логики работы с СУБД?).
+
+Интерфейс:
+
+[source,java]
+----
+public interface DataService {
+
+    public boolean persist(String problem);
+
+    public Set<String> getRandomData();
+}
+----
+
+Реализация:
+
+[source,java]
+----
+@Service("dataService")
+public class DataServiceImpl implements DataService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(DataServiceImpl.class);
+
+    @Autowired
+    @Qualifier("dataRespitory")
+    private DataRepository dataRepository;
+
+    @Override
+    public boolean persist(String problem) {
+        try {
+            dataRepository.persist(new Data(UUID.randomUUID(), problem));
+            return true;
+        } catch (Exception e) {
+            LOG.error("ERROR SAVING DATA: " + e.getMessage(), e);
+            return false;
+        }
+    }
+
+    @Override
+    public Set<String> getRandomData() {
+        return dataRepository.getRandomData();
+    }
+}
+----
+
+Отлично. Теперь создаем пару вспомогательных классов, необходимых для реализации контроллера:
+
+[source,java]
+----
+public class RestException extends Exception {
+
+    public RestException() {
+    }
+
+    public RestException(String message) {
+        super(message);
+    }
+
+    public RestException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public RestException(Throwable cause) {
+        super(cause);
+    }
+
+    public RestException(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
+        super(message, cause, enableSuppression, writableStackTrace);
+    }
+}
+----
+
+Это наша реализация Exception'а. Может пригодиться в будущем, хотя и не обязательна, но на нее завязан следующий класс:
+
+[source,java]
+----
+@Controller
+public class ExceptionHandlerController {
+
+    private static final Logger LOG = Logger.getLogger(ExceptionHandlerController.class);
+
+    @ExceptionHandler(RestException.class)
+    public @ResponseBody
+    String handleException(RestException e) {
+        LOG.error("Ошибка: " + e.getMessage(), e);
+        return "Ошибка: " + e.getMessage();
+    }
+}
+----
+
+Если мы словили такую ошибку в нашем контроллере, то она будет обработана дополнительно в этом методе.
+
+Наконец напишем небольшой классик, который будет формировать структуру данных для передачи на клиент:
+
+[source,java]
+----
+public class Ajax {
+
+    public static Map<String, Object> successResponse(Object object) {
+        Map<String, Object> response = new HashMap<String, Object>();
+        response.put("result", "success");
+        response.put("data", object);
+        return response;
+    }
+
+    public static Map<String, Object> emptyResponse() {
+        Map<String, Object> response = new HashMap<String, Object>();
+        response.put("result", "success");
+        return response;
+    }
+
+    public static Map<String, Object> errorResponse(String errorMessage) {
+        Map<String, Object> response = new HashMap<String, Object>();
+        response.put("result", "error");
+        response.put("message", errorMessage);
+        return response;
+    }
+}
+----
+
+Все, со вспомогательными классами закончили. Осталось написать наш контроллер. Он будет простым, как пробка:
+
+[source,java]
+----
+@Controller
+public class DataController extends ExceptionHandlerController {
+
+    private static final Logger LOG = Logger.getLogger(DataController.class);
+
+    @Autowired
+    @Qualifier("dataService")
+    private DataService dataService;
+
+    @RequestMapping(value = "/persist", method = RequestMethod.POST)
+    public @ResponseBody
+    Map<String, Object> persist(@RequestParam("data") String data) throws RestException {
+        try {
+            if (data == null || data.equals("")) {
+                return Ajax.emptyResponse();
+            }
+            dataService.persist(data);
+            return Ajax.emptyResponse();
+        } catch (Exception e) {
+            throw new RestException(e);
+        }
+    }
+
+    @RequestMapping(value = "/getRandomData", method = RequestMethod.GET)
+    public @ResponseBody
+    Map<String, Object> getRandomData() throws RestException {
+        try {
+            Set<String> result = dataService.getRandomData();
+            return Ajax.successResponse(result);
+        } catch (Exception e) {
+            throw new RestException(e);
+        }
+    }
+
+}
+----
+
+В нем два метода — сохранить полученные данные и выдать порцию случайных данных на клиент. Контроллер унаследован от созданного нами ранее ExceptionHandlerController. Обработка исключений написана только как шаблон и нуждается в соответствующей доработки под себя.
+
+Итак, основная часть серверного кода написана, осталось проверить его работу на клиенте. Для этого нужно доработать наш файл `index.html` и заодно добавить библиотеку `jquery` в каталог `js`.
+
+`index.html`:
+
+[source,html]
+----
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <title>YourApp</title>
+    <script src="js/jquery-2.1.3.min.js"></script>
+</head>
+<body>
+<h1> HELLO WORLD </h1>
+<input type="text" id="data"/>
+<a id="post" href="#">POST</a>
+<a id="get" href="#">GET</a>
+
+<div id="container"></div>
+</body>
+
+<script>
+    $('#get').click(function () {
+        $.ajax({
+            type: "GET",
+            cache: false,
+            url: '/getRandomData',
+            data: "",
+            success: function (response) {
+                var html = "";
+                $.each(response.data, function (i) {
+                    html = html + response.data[i] + "<br/>";
+                });
+                $('#container').html(html);
+            }
+        });
+    });
+
+    $('#post').click(function () {
+        if (!$("#data").val()) {
+            alert("Enter your data!");
+        } else {
+            $.ajax({
+                type: "POST",
+                cache: false,
+                url: '/persist',
+                data: {
+                    'data': $("#data").val()
+                },
+                success: function (response) {
+                    $('#get').click();
+                }
+            });
+        }
+
+    });
+
+</script>
+
+</html>
+----
+
+Да, UI получился не бог весть каким красивым, но зато с его помощью мы можем проверить работу приложения.
+
+Запустим наш проект. В Intellij Idea это можно сделать через специальную конфигурацию запуска(Spring Boot).
+
+Если все сделано верно, то по адресу `localhost:8080` вы сможете увидеть заголовок Hello World, строку ввода и две кнопки. Попробуйте ввести что-нибудь в строку ввода и нажать на кнопку POST. Если после этого вы увидите аналогичный текст ниже поля ввода, то все работает как надо. Теперь останется модифицировать проект под свои нужды, добавить модный UI(например `materializecss.com`) и творить разумное, доброе, вечное.
+
+Однако рано или поздно вы сотворите желаемое и встанет вопрос о том, как донести ваше детище в массы. Об этом будет вторая часть статьи.
+
+Начнем с малого, но важного.
+
+Даже если проект небольшой, все равно для него потребуется свой домен. Если вы просто обкатываете какую-нибудь идею и не хотите тратить бешеные деньги для регистрации домена на том же godaddy, то можете воспользоваться бесплатной альтернативой: `freenom.com`
+
+Этот сервис позволит бесплатно зарегистрировать домен в зонах .tk, .ml, .ga, .cf, .gq
+
+Далее займемся сервером, где все это будет крутиться. Так как проект у нас небольшой, то и сервер нам сгодится небольшой. В идеале хватит VPS. Достать его можно в разных местах, например `www.digitalocean.com`
+
+Итак, регистрируемся, создаем самый простой дроплет и ставим на него ubuntu (в моем случае это `ubuntu 12.04`, дальнейшие инструкции буду описывать для этой системы, но на остальных будет примерно то же)
+
+Отлично, у нас есть сервер, пора залить на него наш проект.
+
+Для начала собираем проект maven'ом. Сделать это можно через IDE или же на худой конец зайдя в корневую директорию проекта и введя команду `mvn clean install`(путь к мавену должен быть прописан в системой переменной `path` на Windows). После выполнения команды собранный jar'ник помещается в локальный репозиторий (по умолчанию именуемый .m2), откуда его можно стянуть для отправки на сервер.
+
+Для передачи файла на сервер используем `WinSCP`, если вы работаете под Windows.
+Далее заходим на наш сервер, используя putty на Windows или ssh на Linux.
+Переходим в директорию, куда был скопирован наш jar-ник и пробуем его запустить командой `java -jar youapp.jar`
+
+Скорей всего, не получилось. А все почему? Наш проект был создан на java 8, а какая java стоит на сервере, можно узнать с помощью команды `java -version`. И скорей всего это либо 6, либо 7.
+
+Но не будем унывать, поставим себе новую версию:
+
+[source,sh]
+----
+sudo add-apt-repository ppa:webupd8team/java
+sudo apt-get update
+sudo apt-get install oracle-java8-installer
+----
+
+Теперь настала очередь postgres'а. До этого мы использовали локальную версию на машине разработчика, теперь пришло время поставить СУБД на сервер.
+
+Для этого сначала выполняем магическую последовательность команд:
+
+[source,sh]
+----
+sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+sudo apt-get install wget ca-certificates
+wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+sudo apt-get update
+sudo apt-get upgrade
+sudo apt-get install postgresql-9.4 postgresql-contrib-9.4
+----
+
+Запускаем postgres:
+
+[source,sh]
+----
+sudo service postgresql start
+----
+
+Далее выполняем команду входа в psql:
+
+[source,sh]
+----
+sudo -u postgres psql
+----
+
+Устанавливаем пароль:
+
+[source,sh]
+----
+\password postgres
+----
+
+И выходим c помощью команды `\q`
+
+Редактируем файл `/etc/postgresql/9.4/main/postgresql.conf`, изменив строчку
+[source,text]
+----
+ `#listen_addresses = 'localhost'`
+----
+
+  на
+
+[source,text]
+----
+`listen_addresses = '*'`
+----
+
+Тем самым мы сможем подключаться к `postgresql` извне с помощью pgadmin'а. Хотя, конечно, желательно этого избежать в целях безопасности, и когда все будет настроено и отлажено, отключить эту возможность.
+
+Затем редактируем файл `/etc/postgresql/9.4/main/pg_hba.conf`
+
+Должны быть добавлены две новых строчки и изменена одна строка для 127.0.0.1 следующим образом:
+
+[source,text]
+----
+host    all             all             127.0.0.1/32                                                  trust
+host    all             all             <ip-адрес сервера>/32                                trust
+host    all             all             <ip-адрес машины разработчика>/32         trust
+----
+
+Я намеренно изменил `md5` на `trust`, так как лично у меня были проблемы с запуском проекта, тем самым отключив проверку пароля для заданных адресов. Возможно у вас их не будет.
+
+Теперь все настроено. Хотя тюнинговать постгрес можно до бесконечности, но ведь у нас всего лишь маленький проект, а значит, пока оставим как есть.
+
+Перезапускаем postgres:
+
+[source,sh]
+----
+ sudo service postgresql restart
+----
+
+и проверяем его работу.
+
+Всё, с настройкой postgres'а закончили, что у нас дальше по сценарию?
+
+Как уже было отмечено ранее, для запуска собранного jar'ника вполне достаточно команды `java -jar youapp.jar`
+
+Однако при подобном запуске для того, чтобы зайти на сайт извне, придется прописывать порт(по умолчанию 8080). Чтобы пользователи смогли зайти на сайт, просто введя его адрес, то нам потребуется прокси сервер. В качестве него можно взять nginx, который нужно будет предварительно настроить.
+
+Устанавливаем nginx:
+
+[source,sh]
+----
+sudo apt-get install nginx
+----
+
+В моем случае корневой директорией `nginx` была `/etc/nginx`. Там нам в первую очередь потребуется изменить файл `/sites_available/`
+
+[source,text]
+----
+default следующим образом:
+server {
+  listen          80;
+  server_name     youapp.com;
+
+  location / {
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Server $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass http://127.0.0.1:8080/;
+  }
+}
+----
+
+Однако и это еще не все. Необходимо также модифицировать наш проект, чтобы он поддерживал настроенный нами прокси. Благо сделать это не трудно, достаточно лишь в `application.properties` добавить строки(не забудьте залить новую версию с изменениями):
+
+[source,text]
+----
+server.tomcat.remote_ip_header=x-forwarded-for
+server.tomcat.protocol_header=x-forwarded-proto
+----
+
+Теперь можно запустить nginx командой `service nginx start` и затем попробовать запустить наш проект. Он будет доступен по ссылке сайта, либо же, если вы еще не приобрели домен, то по его ip-адресу, без указания порта.
+
+Остался еще один небольшой штрих. Немного неудобно всегда стартовать проект тем способом, который был описан выше. Неплохо бы, чтобы при старте проекта консоль ввода на сервере освобождалась, приложение не закрывалось бы после выхода из ssh-сессии и чтобы где-нибудь велись логи приложения. Сделать это можно с помощью команды `nohup`. Предварительно создаем bash-скрипт, называя его
+
+`script.sh`:
+
+[source,sh]
+----
+#!/bin/bash
+java -jar youapp.jar
+----
+
+Прописываем ему право на исполнение:
+
+[source,sh]
+----
+chmod +x ./script.sh
+----
+
+И запускаем командой:
+[source,sh]
+----
+nohup ./start.sh > log.txt 2>&1 &
+----
+
+Все, приложение запущено.
+
+Чтобы остановить приложение, можно либо воспользоваться командой `pkill -9 java`(при условии, что это единственное java-приложение, запущенное на сервере), либо с помощью утилиты `htop`, выделив этот процесс, нажав кнопку F9, выбрав слева в списке `SIGKILL` и нажав `enter`. На заметку: иногда не срабатывает с первого раза и процедуру приходится повторять.
+
+Теперь, если все сделано правильно, можно открыть сайт нашего проекта в браузере и насладиться результатом.
+
+P.S. Надеюсь, ничего не упустил. Если же найдете ошибку, просьба написать об этом в личном сообщении. Текст будет оперативно исправлен.
