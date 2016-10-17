@@ -274,7 +274,7 @@ This solution is much shorter than previous one based on thread pools and decora
 
 == RxJava 2.x and more powerful built-in distinct()
 
-I was actually _this_ close from submitting a PR to RxJava with more powerful implementation of `distinct()` operator. But before I checked 2.x branch and there it was: `distinct()` that allows providing custom `Collection` as opposed to hard-coded `HashSet`. Believe it or not, dependency inversion is not only about Spring framework or Java EE. When a library allows you to provide custom implementation of its internal data structure, this is also DI. First I create a helper method that can build `Set<UUID>` backed by `Map<UUID, Boolean>` backed by Cache<UUID, Boolean>. We sure like delegation!
+I was actually _this_ close from submitting a PR to RxJava with more powerful implementation of `distinct()` operator. But before I checked 2.x branch and there it was: `distinct()` that allows providing custom `Collection` as opposed to hard-coded `HashSet`. Believe it or not, dependency inversion is not only about Spring framework or Java EE. When a library allows you to provide custom implementation of its internal data structure, this is also DI. First I create a helper method that can build `Set<UUID>` backed by `Map<UUID, Boolean>` backed by `Cache<UUID, Boolean>`. We sure like delegation!
 
 [source,java]
 ----
