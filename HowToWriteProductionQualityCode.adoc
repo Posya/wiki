@@ -1,0 +1,36 @@
+= How to write Production quality code?
+
+We often here the term _"production quality code"_ , some times in interview where interviewee asked to write production quality code for a particular function, sometimes discussion between developers and programmers and sometimes during code review. I know most of you familiar with the term but for those who wonder what is production quality code in simple terms its code which can bear the test of time in a production environment.
+
+We all develop code in development, then test in QA and finally it gets released in production. But there are a lot of difference between test and prod and if you have not coded taking prod environment in mind most likely code will fail in prod or result in exceptions.So what makes production environment different than development environment? Here are few things which I noted:
+
+. Production is all about *load* which will expose *concurrency issues*, load issues, memory and CPU issues.
+
+. You will get a lot many *scenarios* in production that you might have thought in development. If think through process is not applied than most likely those scenario has not handled in production.
+
+. Different *data input or incorrect data*, one of the classic problems in production is the data which gets input to your program, be it from the upstream system or any other place you will get all sort of data and if your program doesn't handle those very likely it will suffer.
+
+. *Boundary conditions*, this is some what related to above point data and scenarios but most of the boundary condition e.g. null, empty etc exposed in production.
+
+
+
+So if a code is written all these things and potentially domain specific things and can sustain test of production than it called a *production quality code* and believe me it takes a lot of experience, skill and think through process to write production quality code not just in first time even after two or three iteration but as a developer we should always strive for writing production quality code in the first attempt.
+
+Now let's see how we can do that, what are the things we should keep in mind:
+
+. Get your requirements right, understand the problem, talk to user or business person as much as possible this will help you to find different scenario as early as possible. Many times business or user does not tell you everything it's not their fault but it doesn't come in mind right through. So if you are frequently speaking, discussing and presenting solution to them most likely they will ask questions, give feedback which eventually expose more scenario and subtle details. Here experience plays an important role. More experience or domain knowledge you, much better code you will write.
+
+. Think through, Think through and Think through. There is no substitute of this, it is more of a skill and art than science but you will get hold of this when you get more experience. For example, if a user says that you need replay capability in your program. You should be able to think of all possible scenarios where you need to replay and what could be required for that, what would be a side effect of that. Does replay would be requested, what if the requesting system went down again, will you be able to re replay etc.
+
+. Boundary condition, always think that you will get bad input , you will get null or empty, small or very large numbers, the function may get called at the wrong time etc. you can get rid of this by writing the unit test for each boundary condition.
+
+. Concurrency, this is is the major culprit and big problem which exposes itself in production when due to load multiple threads gets triggered and access your program concurrently. With the high-speed low latency electronic trading system and with many other java systems where its requirement to have a concurrent application this can only be addressed by proper design , if you get the design right you will safe other wise you will need to bear the pain of redesigning or rewriting code. You can also expose concurrency issue by doing load testing in early QA cycles.
+
+. Exception handling, this is the by far most important characteristic of production quality code, it must be able to handle an exceptional scenario in clear cut predefined way. The whole program should never be crashed due to one single bad input or scenario.
+
+. Recoverable, code should be able to recover itself in the case of premature closing or crash.
+
+
+Though these are just some points which I am able to think, there are lots more and it’s a constant process of improving yourself and I always strive for this. Please share how you guys write production quality code, what are things you guys keep in mind, what questions you guys ask to yourself and to a user ?
+
+Thank you.

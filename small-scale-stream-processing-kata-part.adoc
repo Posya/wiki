@@ -166,10 +166,32 @@ After 30 seconds our application processes events on average with 15 second dela
 
 == Naive thread pool
 
-The most obvious solution is to invoke `EventConsumer` from multiple threads. The easiest way to do this is by taking advantage of `ExecutorService`:
+The most obvious solution is to invoke EventConsumer from multiple threads. The easiest way to do this is by taking advantage of ExecutorService:
 
-[source,java]
-----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -194,18 +216,23 @@ class NaivePool implements EventConsumer, Closeable {
         executorService.shutdown();
     }
 }
-----
+We use a decorator pattern here. The original ClientProjection, implementing EventConsumer was correct. However we wrap it with another implementation of EventConsumer that adds concurrency. This will allows us to compose complex behaviors without changing ClientProjection itself. Such design promotes:
 
-We use a https://en.wikipedia.org/wiki/Decorator_pattern[decorator pattern] here. The original `ClientProjection`, implementing `EventConsumer` was correct. However we wrap it with another implementation of `EventConsumer` that adds concurrency. This will allows us to compose complex behaviors without changing `ClientProjection` itself. Such design promotes:
-
-- loose coupling: various `EventConsumer` don't know about each other and can be combined freely
-- single responsibility: each does one job and delegates to the next component
-- https://en.wikipedia.org/wiki/Open/closed_principle[open/closed principle]: we can change the behavior of the system without modifying existing implementations.
-
+loose coupling: various EventConsumer don't know about each other and can be combined freely
+single responsibility: each does one job and delegates to the next component
+open/closed principle: we can change the behavior of the system without modifying existing implementations.
 Open/closed principle is typically achieved by injecting strategies and template method pattern. Here it's even simpler. Whole wiring looks as follows:
 
-[source,java]
-----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
 MetricRegistry metricRegistry =
         new MetricRegistry();
 ProjectionMetrics metrics =
@@ -216,12 +243,17 @@ NaivePool naivePool =
         new NaivePool(10, clientProjection);
 EventStream es = new EventStream();
 es.consume(naivePool);
-----
-
 Our carefully crafted metrics reveal that the situation is indeed much better:
 
-[source,java]
-----
+1
+2
+3
+4
+5
+6
+7
+8
+9
 type=HISToOGRAM, count=838, min=1, max=422, mean=38.80768197277468, [...]
     median=37.0, p75=45.0, p95=51.0, p98=52.0, p99=52.0, p999=422.0
 type=HISTOGRAM, count=1814, min=1, max=281, mean=47.82642776789085, [...]
@@ -231,12 +263,35 @@ type=HISTOGRAM, count=1814, min=1, max=281, mean=47.82642776789085, [...]
 
 type=HISTOGRAM, count=30564, min=5, max=3838, mean=364.2904915942238, [...]
     median=352.0, p75=496.0, p95=568.0, p98=574.0, p99=1251.0, p999=3531.0
-----
+Yet we still see growing delay on a much smaller scale, after 30 seconds the latency reached 364 milliseconds. It keeps growing so the problem is systematic. We... need... more... metrics. Notice that NaivePool (you'll see soon why it's naive) has exactly 10 threads at its disposal. This should be just about enough to handle thousand events, each taking 10 ms to process. In reality we need a little bit of extra processing power to avoid issues after garbage collection or during small load spikes. To prove that thread pool is actually our bottleneck it's best to monitor its internal queue. This requires a little bit of work:
 
-Yet we still see growing delay on a much smaller scale, after 30 seconds the latency reached 364 milliseconds. It keeps growing so the problem is systematic. We... need... more... metrics. Notice that `NaivePool` (you'll see soon why it's _naive_) has exactly 10 threads at its disposal. This should be just about enough to handle thousand events, each taking 10 ms to process. In reality we need a little bit of extra processing power to avoid issues after garbage collection or during small load spikes. To prove that thread pool is actually our bottleneck it's best to monitor its internal queue. This requires a little bit of work:
-
-[source,java]
-----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
 class NaivePool implements EventConsumer, Closeable {
 
     private final EventConsumer downstream;
@@ -264,28 +319,58 @@ class NaivePool implements EventConsumer, Closeable {
         executorService.shutdown();
     }
 }
-----
+The idea here is to create ThreadPoolExecutor manually in order to provide custom LinkedBlockingQueue instance. We can later use that queue to monitor its length (see: ExecutorService - 10 tips and tricks). Gauge will periodically invoke queue::size and report it to wherever you need it. Metrics confirm that thread pool size was indeed a problem:
 
-The idea here is to create `ThreadPoolExecutor` manually in order to provide custom `LinkedBlockingQueue` instance. We can later use that queue to monitor its length (see: http://www.nurkiewicz.com/2014/11/executorservice-10-tips-and-tricks.html[ExecutorService - 10 tips and tricks]). Gauge will periodically invoke `queue::size` and report it to wherever you need it. Metrics confirm that thread pool size was indeed a problem:
-
-[source,java]
-----
+1
+2
+3
+4
+5
+6
 type=GAUGE, name=[...].queue, value=35
 type=GAUGE, name=[...].queue, value=52
 
 [...30 seconds later...]
 
 type=GAUGE, name=[...].queue, value=601
-----
+The ever-growing size of the queue holding pending tasks hurts the latency. Increasing thread pool size from 10 to 20 finally reports decent results and no stalls. However we still didn't address duplicates and protecting from concurrent modification of events for the same clientId.
 
-The ever-growing size of the queue holding pending tasks hurts the latency. Increasing thread pool size from 10 to 20 finally reports decent results and no stalls. However we still didn't address duplicates and protecting from concurrent modification of events for the same `clientId`.
+Obscure locking
 
-== Obscure locking
+Let's start from avoiding concurrent processing of events for the same clientId. If two events come very quickly one after another, both related to the same clientId, NaivePool will pick both of them and start processing them concurrently. First we'll at least discover such situation by having a Lock for each clientId:
 
-Let's start from avoiding concurrent processing of events for the same `clientId`. If two events come very quickly one after another, both related to the same `clientId`, `NaivePool` will pick both of them and start processing them concurrently. First we'll at least discover such situation by having a Lock for each `clientId`:
-
-[source,java]
-----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
 @Slf4j
 class FailOnConcurrentModification implements EventConsumer {
 
@@ -318,12 +403,17 @@ class FailOnConcurrentModification implements EventConsumer {
     }
 
 }
-----
-
 This is definitely going in the wrong direction. The amount of complexity is overwhelming but running this code at least reveals there is an issue. The event processing pipeline looks as follows, with one decorator wrapping another:
 
-[source,java]
-----
+1
+2
+3
+4
+5
+6
+7
+8
+9
 ClientProjection clientProjection =
         new ClientProjection(new ProjectionMetrics(metricRegistry));
 FailOnConcurrentModification failOnConcurrentModification =
@@ -333,12 +423,47 @@ NaivePool naivePool =
 EventStream es = new EventStream();
 
 es.consume(naivePool);
-----
+Once in a while the error message will pop-up, telling us that some other thread is already processing event for the same clientId. For each clientId we associate a Lock that we examine in order to figure out if another thread is not processing that client at the moment. As ugly as it gets we are actually quite close to a brutal solution. Rather than failing when Lock cannot be obtained because another thread is already processing some event, let's wait a little bit, hoping the Lock will get released:
 
-Once in a while the error message will pop-up, telling us that some other thread is already processing event for the same `clientId`. For each `clientId` we associate a `Lock` that we examine in order to figure out if another thread is not processing that client at the moment. As ugly as it gets we are actually quite close to a brutal solution. Rather than failing when `Lock` cannot be obtained because another thread is already processing some event, let's wait a little bit, hoping the `Lock` will get released:
-
-[source,java]
-----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
 @Slf4j
 class WaitOnConcurrentModification implements EventConsumer {
 
@@ -378,20 +503,43 @@ class WaitOnConcurrentModification implements EventConsumer {
     }
 
 }
-----
+The idea is very similar. But instead of failing tryLock() waits up to 1 second hoping the Lock for given client will be released. If two events come in very quick succession, one will obtain a Lock and proceed whereas the other will block waiting for unlock() to happen.
 
-The idea is very similar. But instead of failing `tryLock()` waits up to 1 second hoping the `Lock` for given client will be released. If two events come in very quick succession, one will obtain a `Lock` and proceed whereas the other will block waiting for `unlock()` to happen.
+Not only this code is really convoluted, but probably also broken in many subtle ways. For example what if two events for the same clientId came almost exactly at the same time, but obviously one was first? Both events will ask for Lock at the same time and we have no guarantee which event will obtain a non-fair Lock first, possibly consuming events out of order. There must be a better way...
 
-Not only this code is really convoluted, but probably also broken in many subtle ways. For example what if two events for the same `clientId` came almost exactly at the same time, but obviously one was first? Both events will ask for `Lock` at the same time and we have no guarantee which event will obtain a non-fair `Lock` first, possibly consuming events out of order. There must be a better way...
+Dedicated threads
 
-== Dedicated threads
+Let's take a step back and a very deep breath. How do you ensure things aren't happening concurrently? Well, just use one thread! As a matter of fact that's what we did in the very beginning but the throughput was unsatisfactory. But we don't care about concurrency for different clientIds, we just have to make sure events with the same clientId are always processed by the same thread!
 
-Let's take a step back and a very deep breath. How do you ensure things aren't happening concurrently? Well, just use one thread! As a matter of fact that's what we did in the very beginning but the throughput was unsatisfactory. But we don't care about concurrency for different `clientIds`, we just have to make sure events with the same `clientId` are always processed by the same thread!
+Maybe creating a map from clientId to Thread comes to your mind? Well, this would be overly simplistic. We would create thousands of threads, each idle most of the time as per the requirements (only few events per second for given clientId). A good compromise is a fixed-size pool of threads, each thread responsible for a well-known subset of clientIds. This way two different clientIds may end up on the same thread but the same clientId will always be handled by the same thread. If two events for the same clientId appear, they will both be routed to the same thread, thus avoiding concurrent processing. The implementation is embarrassingly simple:
 
-Maybe creating a map from `clientId` to `Thread` comes to your mind? Well, this would be overly simplistic. We would create thousands of threads, each idle most of the time as per the requirements (only few events per second for given `clientId`). A good compromise is a fixed-size pool of threads, each thread responsible for a well-known subset of `clientIds`. This way two different `clientIds` may end up on the same thread but the same `clientId` will always be handled by the same thread. If two events for the same `clientId` appear, they will both be routed to the same thread, thus avoiding concurrent processing. The implementation is embarrassingly simple:
-
-[source,java]
-----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
 class SmartPool implements EventConsumer, Closeable {
 
     private final List<ExecutorService> threadPools;
@@ -419,22 +567,48 @@ class SmartPool implements EventConsumer, Closeable {
         return event;
     }
 }
-----
-
 The crucial part is right at the end:
 
-[source,java]
-----
+1
+2
 int threadIdx = event.getClientId() % threadPools.size();
 ExecutorService executor = threadPools.get(threadIdx);
-----
-
-This simple algorithm will always use the same single-thread `ExecutorService` for the same `clientId`. Different `IDs` may end up in the same pool, for example when pool size is 20, clients 7, 27, 47, etc. will use the same thread. But this is OK, as long as one `clientId` always uses the same thread. At this point no locking is necessary and sequential invocation is guaranteed because events for the same client are always executed by the same thread. Side note: one thread per `clientId` would not scale, but one actor per `clientId` (e.g. in Akka) is a great idea that simplifies a lot.
+This simple algorithm will always use the same single-thread ExecutorService for the same clientId. Different IDs may end up in the same pool, for example when pool size is 20, clients 7, 27, 47, etc. will use the same thread. But this is OK, as long as one clientId always uses the same thread. At this point no locking is necessary and sequential invocation is guaranteed because events for the same client are always executed by the same thread. Side note: one thread per clientId would not scale, but one actor per clientId (e.g. in Akka) is a great idea that simplifies a lot.
 
 By the way to be extra safe I plugged in metrics for average queue size in each and every thread pool which made the implementation longer:
 
-[source,java]
-----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
 class SmartPool implements EventConsumer, Closeable {
 
     private final List<LinkedBlockingQueue<Runnable>> queues;
@@ -467,16 +641,43 @@ class SmartPool implements EventConsumer, Closeable {
     //...
 
 }
-----
-
 If you are paranoid you can even create one metric per each queue.
 
-== Deduplication and idempotency
+Deduplication and idempotency
 
-In distributed environment it's quite common to receive duplicated events when your producer has at _least once_ guarantees. The reasons behind such behavior are beyond the scope of this article but we must learn how to live with that issue. One way is to attach globally unique identifier (`UUID`) to every message and make sure on the consumer side that messages with the same identifier aren't processed twice. Each `Event` has such `UUID`. The most straightforward solution under our requirements is to simply store all seen `UUIDs` and verify on arrival that received `UUID` was never seen before. Using `ConcurrentHashMap<UUID, UUID>` (there is no `ConcurrentHashSet` in JDK) as-is will lead to memory leak as we will keep accumulating more and more `IDs` over time. That's why we only look for duplicates in the last 10 seconds. You can technically have `ConcurrentHashMap<UUID, Instant>` that maps from `UUID` to timestamp when it was encountered. By using a background thread we can then remove elements older than 10 seconds. But if you are a happy Guava user, `Cache<UUID, UUID>` with declarative eviction policy will do the trick:
+In distributed environment it's quite common to receive duplicated events when your producer has at least once guarantees. The reasons behind such behavior are beyond the scope of this article but we must learn how to live with that issue. One way is to attach globally unique identifier (UUID) to every message and make sure on the consumer side that messages with the same identifier aren't processed twice. Each Event has such UUID. The most straightforward solution under our requirements is to simply store all seen UUIDs and verify on arrival that received UUID was never seen before. Using ConcurrentHashMap<UUID, UUID> (there is no ConcurrentHashSet in JDK) as-is will lead to memory leak as we will keep accumulating more and more IDs over time. That's why we only look for duplicates in the last 10 seconds. You can technically have ConcurrentHashMap<UUID, Instant> that maps from UUID to timestamp when it was encountered. By using a background thread we can then remove elements older than 10 seconds. But if you are a happy Guava user, Cache<UUID, UUID> with declarative eviction policy will do the trick:
 
-[source,java]
-----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
@@ -508,12 +709,34 @@ class IgnoreDuplicates implements EventConsumer {
         }
     }
 }
-----
-
 Once again to be safe on production there are at least two metrics I can think of that might become useful: cache size and number of duplicates discovered. Let's plug-in these metrics as well:
 
-[source,java]
-----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
 class IgnoreDuplicates implements EventConsumer {
 
     private final EventConsumer downstream;
@@ -540,18 +763,23 @@ class IgnoreDuplicates implements EventConsumer {
         }
     }
 }
-----
+Finally we have all the pieces to build our solution. The idea is to compose pipeline from EventConsumer instances wrapping each other:
 
-Finally we have all the pieces to build our solution. The idea is to compose pipeline from `EventConsumer` instances wrapping each other:
+First we apply IgnoreDuplicates to reject duplicates
+Then we call SmartPool that always pins given clientId to the same thread and executes next stage in that thread
+Finally ClientProjection is invoked that does the real business logic.
+You can optionally place FailOnConcurrentModification step between SmartPool and ClientProjection for extra safety (concurrent modification shouldn't happen by design):
 
-. First we apply IgnoreDuplicates to reject duplicates
-. Then we call SmartPool that always pins given clientId to the same thread and executes next stage in that thread
-. Finally ClientProjection is invoked that does the real business logic.
-
-You can optionally place `FailOnConcurrentModification` step between `SmartPool` and `ClientProjection` for extra safety (concurrent modification shouldn't happen by design):
-
-[source,java]
-----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
 ClientProjection clientProjection =
         new ClientProjection(new ProjectionMetrics(metricRegistry));
 FailOnConcurrentModification concurrentModification =
@@ -562,6 +790,4 @@ IgnoreDuplicates withoutDuplicates =
         new IgnoreDuplicates(smartPool, metricRegistry);
 EventStream es = new EventStream();
 es.consume(withoutDuplicates);
-----
-
-It took us a lot of work to come up with relatively simple and well structured (I hope you agree) solution. In the end the best way to tackle concurrency issues is to... avoid concurrency and run code that is subject to race conditions in one thread. This is also the idea behind Akka actors (single message processed per actor) and RxJava (one message processed by `Subscriber`). In the next installment we will see declarative solution in `RxJava`.
+It took us a lot of work to come up with relatively simple and well structured (I hope you agree) solution. In the end the best way to tackle concurrency issues is to... avoid concurrency and run code that is subject to race conditions in one thread. This is also the idea behind Akka actors (single message processed per actor) and RxJava (one message processed by Subscriber). In the next installment we will see declarative solution in RxJava.
