@@ -1,0 +1,353 @@
+= Tutorial: Build a Flexible CRUD App with Spring Boot in 20 Minutes
+
+:imagesdir: ./tutorial-crud-spring-boot-20-minutes/
+
+by Karl Penzhorn | July 28, 2016 |Java
+
+Welcome to quick and easy CRUD application development with Spring Boot!
+
+For this tutorial, nothing is assumed except some basic Java experience. We’ll show you how simple it is to create compliant and flexible REST services using the incredible frameworks Spring and Spring Boot. We’ll go through the how and why of it all, step-by-step so you can comfortably explore further on your own.
+
+== Starting From Scratch with Spring Boot and Maven
+
+In order to understand what is going here it’s worth building up a project from scratch, file-by-file and line-by-line. With Spring Boot and Maven this is quite easily done in 20 minutes, but first let’s quickly talk about Spring.
+
+== Spring and Spring Boot
+
+*Spring* is an application framework built on top of Java. It allows for the building of decoupled systems using dependency injection. In this tutorial we’ll create an app that uses an embedded (i.e. in-memory) database and we’ll do this without using any code. The intended implementation library simply needs to be included in the project. If you haven’t worked with Spring you’ll be amazed at how easily components are swapped in and out.
+
+*Spring Boot* makes building Spring applications easier by requiring almost no configuration. Things like library versions are automatically resolved, and deployment is a breeze. Basically, it doubles down on Spring’s simplification of Java development.
+
+And finally, *Spring Data* is Spring’s helper library for data access. It’s primary usage is the *Spring Data JPA*, which lets you connect to engines conforming to the JPA standard. This is what we will be using to wire up our database.
+
+== Creating a CRUD App
+
+With all this Spring magic, creating a consistent and compliant REST web service requires four files, _in total_.
+
+- `pom.xml`
+- `Application.java`
+- `Object.java`
+- `ObjectRepository.java`
+
+Incredibly, that’s it. A fully working REST server with CRUD and search operations, deployable with one command. And not only that, each file is no more than a dozen lines long.
+
+== Configure With pom.xml
+
+Maven uses a `pom.xml` file to configure builds. It has three sections – general properties, dependencies, and the build itself.
+
+Most `pom.xml` files start with a lots of xml details.
+
+
+[source,xml]
+----
+<xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+----
+
+But this isn’t necessary for our purposes. (check out https://maven.apache.org/guides/introduction/introduction-to-the-pom.html[Maven’s Introduction to pom for more details]). The minimal pom file you need for this tutorial looks like this:
+
+[source,xml]
+----
+<project>
+    <modelVersion>4.0.0<modelVersion>
+    <groupId>com.mycompany.app</groupId>
+    <artifactId>my-app</artifactId>
+    <version>1</version>
+</project>
+----
+
+This builds fine.
+
+image::1.png[CRUD app with Spring Boot]
+
+NOTE: I suppressed the build log with `> /dev/null` to make the screenshot readable.
+
+== The Parent
+
+Next, we include a parent:
+
+[source,xml]
+----
+<parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>1.3.6.RELEASE</version>
+</parent>
+----
+
+The `parent` tag tells Maven that we’d like to use another pom to encapsulate ours, i.e. inherit various properties and tags. Here we’re inheriting from Spring Boot (note the group `org.springframework.boot`) something called the Spring Boot Starter Parent. We don’t _have_ to inherit from the starter parent. Mainly it’s there to set things up easily. One of nicest features is that you don’t have to include version numbers of Spring Boot libraries in your pom – it will figure them out for you!
+
+== Spring Boot Starters
+
+Next we define our dependencies – the libraries we’d like to use. Spring Boot comes with one-stop-shop packages called Starters that include everything you need for a ready-made application. (These are what typically what you see in the Spring Initialzr with all the dependencies you can wire in.) We’re going to be using two – *Spring Data Rest* and *Spring Data JPA*.
+
+
+[source,xml]
+----
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-rest</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+----
+
+Two things to note: First, both packages come from the `org.springframework.boot` group. And second, we didn’t have to specify version numbers. The Starter Parent does that for us!
+
+For more details on how this works, check out our https://stormpath.com/blog/spring-boot-default-starters[Spring Boot Starters tutorial].
+
+== Add a Database
+
+The last dependency we need is our database. If we tried to build with what we have so far it would fail since it’s looking for something to wire the persistence to.
+
+The easiest way to get set up is to use one that is _embedded_, which just means it’s in-memory, so you don’t have to connect it to something like MySQL with a url and login details. (I’ll show you how to do that as well at the end, though.)
+
+[source,xml]
+----
+<dependency>
+    <groupId>com.h2database</groupId>
+    <artifactId>h2</artifactId>
+</dependency>
+----
+
+This, again amazingly, is it for setting up our database!
+
+== Dependency Wrapper
+
+Your dependencies (which really is just a fancy way of telling Maven “please download these JARs into my project’s classpath”) need to be wrapped in a node called `dependencies`.
+
+[source,xml]
+----
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-rest</artifactId>
+     </dependency>
+     <dependency>
+         <groupId>org.springframework.boot</groupId>
+         <artifactId>spring-boot-starter-data-jpa</artifactId>
+     </dependency>
+     <dependency>
+         <groupId>com.h2database</groupId>
+         <artifactId>h2</artifactId>
+     </dependency>
+</dependencies>
+----
+
+== Maven Boot Plugin
+
+The last thing we’re going to do is include a plugin for Maven. Typically running your project is complicated – you could try a `java -jar target/demo-0.0.1-SNAPSHOT.jar` but this normally fails because you haven’t set up your classpath.
+
+Actually, the first thing that happens is you get a manifest error.
+
+image::2.png[Maven Boot Plugin]
+
+You can fix this using the pom but it’s easier use Spring Boot to fix that for us. Simply add this to the bottom.
+
+
+[source,xml]
+----
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-maven-plugin</artifactId>
+        </plugin>
+    </plugins>
+</build>
+----
+
+That makes running your app simple: just type `mvn spring-boot:run`, but not right now! If we do this now it will fail – we need a main class first.
+
+We’re done with the pom though. Here’s the full example:
+
+[source,xml]
+----
+<project>
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.example</groupId>
+    <artifactId>demo</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>1.3.6.RELEASE</version>
+    </parent>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-rest</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
+----
+
+== Adding Java to Your pom.xml
+
+So far all we’ve done is created a single file – `pom.xml`. Now we need to include some Java.
+The first thing we need is the application entry point. Maven starts look for your code in `src/main/java`. The application must be in a package, so let’s put it in `demo`.
+
+image::3.png[Maven]
+
+image::4.png[Maven demo]
+
+The contents of `Application.java` are remarkably straight forward.
+
+[source,java]
+----
+package demo;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+----
+
+If that doesn’t blow you away I don’t know what will. Everything is wired up automatically. We didn’t even have to specify this class in our pom! Spring Boot does that for us by searching for a class that defines a `main` function in `src/main/java`.
+
+We now have a fully working application with just these two files:
+
+image::5.png[Maven test]
+
+image::6.png[Maven and Tomcat]
+
+As you can see, it has started a Tomcat instance on port 8080. We have a running server with standardized logging and REST functionality!
+
+== Curl
+
+To see what’s on the server we use curl.
+
+image::7.png[Curl]
+
+If you don’t know curl, we’ve just called GET on the server and it’s returned JSON. What is returned is a list of what you can do on the server (the `\_links` section). Right now it’s saying there is only one thing available – `http://localhost:8080/profile`, which is just a reference to ourself.
+
+image::8.png[Curl JSON]
+
+== Adding an Object
+
+To create something that can be persisted we use two more Java files – the definition of the object itself, and the repository used for storage.
+
+image::9.png[Adding an Object]
+
+For `Person.java` we define a standard Java bean but with a few annotations.
+
+
+[source,java]
+----
+package demo;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+
+@Entity
+public class Person {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private long id;
+
+    private String firstName;
+    private String lastName;
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+}
+----
+
+For the repository we simply define an interface that extends `CrudRepository`, and annotate using `@RepositoryRestResource`.
+
+[source,java]
+----
+package demo;
+
+import java.util.List;
+
+import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.rest.core.annotation.RepositoryRestResource;
+
+@RepositoryRestResource
+public interface PersonRepository extends CrudRepository<Person, Long> {
+
+}
+----
+
+== Booyah!
+
+And that’s it! We now have a fully REST-compliant CRUD server!
+
+image::10.png[Screenshot from 2016-07-22 15-59-49]
+
+image::11.png[Screenshot from 2016-07-22 16-00-27]
+
+image::12.png[Screenshot from 2016-07-22 16-05-41]
+
+Now when we call GET on the server we get another link: `persons` (just the name of your class with an `s` added). To see what `persons` we have get just curl on the url.
+
+image::13.png[Screenshot from 2016-07-22 16-07-13]
+
+Now besides the links we see an embedded section which shows the contents of our embedded database, it has one table – persons. And it’s empty.
+
+image::14.png[Screenshot from 2016-07-22 16-11-17]
+
+If we POST the JSON contents to `localhost:8080/persons` we get back the person – `localhost:8080/persons/1`.
+
+image::15.png[Screenshot from 2016-07-22 16-12-39]
+
+Boom.
+
+== There’s so much more!
+
+This tutorial should get you set with a basic CRUD application and very few moving parts. From here you could add in features like, switching out your database, using paging results, and writing tests. To see this project in full, https://github.com/stormpath/stormpath-spring-boot-jpa-example[clone it on GitHub]. Or, to learn more about Spring Boot and adding authentication to your application, check out these resources:
+
+- https://stormpath.com/blog/5-practical-tips-for-building-your-spring-boot-api[5 Practical Tips for Building Your Spring Boot API]
+- https://stormpath.com/blog/ozorkauth-learn-oauth2-spring-boot-fun-way[OZork Auth — Learn OAuth 2.0 + Spring Boot the Fun Way!]
+- https://stormpath.com/blog/ozorkauth-learn-oauth2-spring-boot-fun-way[A Simple Web App With Spring Boot, Spring Security, and Stormpath — in 15 Minutes]
+

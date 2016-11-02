@@ -1,0 +1,340 @@
+= Object hacking in java - Power of reflection
+
+By Debadatta Mishra
+
+This article gives you the inner power of reflection. Actually speaking there is no concept of hacking. It is just a tweak you can make to a java object through reflection. In this article I will show you how to break some of the object oriented concept using reflection. As you know reflection is the ability of the software to analyse itself. There are two ways you create an instance of a class. One way you can create an object directly using new operator of the class which is at your classpath. You can create an instance of a class using java.lang.reflect package of JDK. The syntax takes the forma as `Class.forName()`. Using reflection you can dynamically load the class. Sometime it is often asked in the technical interview that why it is required or what is the use although we can directly access the class object. Be sure to give specific answer. However I am going to give you the details of reflection. You can refer to any book on java or you can go to Sun site to get large tutorials on reflection.
+
+== Technicalities
+
+I represent some of the use cases you can play with the java objects using reflection.
+
+=== Case-I : Accessing private fields
+
+As you know that you can not directly access the private fields declared in a class. It is a violation of the object oriented concept. But it is still possible using reflection. Of course it is a round about way and it is not a direct approach. It is just like a back door entry to get the values. The complete example is given below.
+
+
+[source,java]
+----
+package com.dds.core;
+
+/**
+ * This is a normal class where
+ * all the fields are private.
+ *
+ * @author Debadatta Mishra(PIKU)
+ *
+ */
+public class Emp {
+    private String name = "John";
+    private int age = 23;
+    private Integer sal = new Integer(5000);
+    private Double incentive = new Double("12345.567");
+    private boolean isEmployee = true;
+}
+----
+
+Although I have written the java docs for this class, still it is worth to explain you a little. In this above class `Emp` all the fields are declared private so that no body can access these outside the scope. Please refer to the following example where you can obtain the values.
+
+[source,java]
+----
+package com.dds.test;
+
+import java.lang.reflect.Field;
+
+/**
+ * This is a testharness class for the class
+ * Emp. This class displays how to access the
+ * private field value.
+ *
+ * @author Debadatta Mishra(PIKU)
+ *
+ */
+public class EmpTestharness {
+    public static void main(String[] args) {
+        try {
+            Class cls = Class.forName("com.dds.core.Emp");
+            Object obj = cls.newInstance();
+            Field[] fields = cls.getDeclaredFields();
+            for( int i = 0 ; i < fields.length ; i++ ) {
+                fields[i].setAccessible(true);
+                System.out.println("Field Name-->"+fields[i].getName()+"\t"
+                        +"Field Type-->"+ fields[i].getType().getName()+"\t"
+                        +"Field Value-->"+ fields[i].get(obj));
+            }
+        } catch( Exception e ) {
+            e.printStackTrace();
+        }
+    }
+}
+----
+
+The above class is a test harness example for the class `Emp`. This test harness class displays you the field name , filed type and along with the field values.
+
+=== Case-2 : Access the private methods
+
+It is also true that you can not access the private methods out side the scope of the class. It is also possible to get the methods values if present in the class using reflection. Think that there is a `Lover` who stores her age and secret password inside the method. Now the intelligent Male lover wants know her age and password. This is just an example. Please refer to the following example.
+
+
+[source,java]
+----
+package com.dds.core;
+
+/**
+ * This is a class where all the
+ * methods are private.
+ *
+ * @author Debadatta Mishra(PIKU)
+ *
+ */
+public class Lover {
+    private String getPassword() {
+        return "This is my password";
+    }
+
+    private int getAge() {
+        return 23;
+    }
+
+    private String getLoverName() {
+        return "My Best Lover";
+    }
+
+}
+----
+
+In the above class all the methods are declared private. Still you obtain the values returning from the private methods. The following is the test harness class for the `Lover`.
+
+
+[source,java]
+----
+package com.dds.test;
+
+import java.lang.reflect.Method;
+
+/**This is a testharness class is used for the class
+ * Lover. This class displays you how to access the values
+ * of the private methods.
+ * @author Debadatta Mishra(PIKU)
+ *
+ */
+public class LoverTestharness {
+    public static void main(String[] args) {
+        try {
+            Class cls = Class.forName("com.dds.core.Lover");
+            Object obj = cls.newInstance();
+            Method[] methods =  cls.getDeclaredMethods();
+            for( int i = 0 ; i < methods.length ; i++ ) {
+                System.out.println("Method Name--->>>"+methods[i].getName());
+                System.out.println("Method Return Type--->>>"+methods[i].getReturnType());
+                methods[i].setAccessible(true);
+                System.out.println("Method Value--->>>"+methods[i].invoke(obj));
+            }
+        } catch( Exception e ) {
+            e.printStackTrace();
+        }
+    }
+}
+----
+
+This test harness class is used to display the values obtained from the private methods. Isn’t interesting ?
+
+=== Case-3: Creating instance of a class having private constructor
+
+Is it possible to create an instance of a class whose constructor is private in a normal way ? No way ! Think for an example an intelligent student does not allow to create an instance of the class. However you can create an object using reflection. Please refer to the following class.
+
+[source,java]
+----
+package com.dds.core;
+
+/**
+ * This is a class whose constructor is
+ * made private so that it can not be
+ * instantiated.
+ *
+ * @author Debadatta Mishra(PIKU)
+ *
+ */
+public class Student {
+    private Student() {
+        super();
+    }
+}
+----
+
+In the above example the constructor is private. So normally you won’t be able to create an object in the way `Student student = new Student();`. So we have to use reflection. Please refer to the following test harness class.
+
+
+[source,java]
+----
+package com.dds.test;
+
+import java.lang.reflect.Constructor;
+
+/**This is a testharness class for the class Student.
+ * This class shows you how to create an instance of
+ * a class whose constructor is private.
+ *
+ * @author Debadatta Mishra(PIKU)
+ *
+ */
+public class StudentTestharness {
+    public static void main(String[] args) {
+        try {
+            Class cls = Class.forName("com.dds.core.Lover");
+            Constructor[] constructors = cls.getDeclaredConstructors();
+            System.out.println("Constructor Name--->>>"+constructors[0].getName());
+            constructors[0].setAccessible(true);
+            System.out.println("Object creation--->>>"+constructors[0].newInstance( ));
+        } catch( Exception e ) {
+            e.printStackTrace();
+        }
+    }
+}
+----
+
+So in the above test harness class you will be able to create an object reference although the constructor is private.
+
+=== Case-4:Creation of multiple instance from Singleton class
+
+As you know that there will be one and only one instance in case of singleton design pattern. I am not going to describe the details singleton design pattern. Hope you know about it. There are some ways you can create singleton class. I present here in one way. However it is also possible to create multiple instances from the singleton class. I can say that I can create basically two instances , one using reflection and another using directly. Please follow the following class.
+
+
+[source,java]
+----
+package com.dds.core;
+
+/**
+ * This is a class which represents a singleton
+ * design pattern. However it is a normal singleton
+ * pattern.
+ * @author Debadatta Mishra(PIKU)
+ *
+ */
+public class MySingleton {
+    private static MySingleton single = null;
+
+    private MySingleton() {
+        super();
+    }
+
+    public static MySingleton getInstance() {
+        if( single == null )
+            single = new MySingleton();
+        return single;
+    }
+}
+----
+
+The above class is a flavour of singleton design pattern. I do not know to how much extent it is appropriate, still I will get only one instance across my application. Please refer to the following test harness class where we will be able to create several instances from the above singleton class.
+
+
+[source,java]
+----
+package com.dds.test;
+
+import java.lang.reflect.Constructor;
+import com.dds.core.MySingleton;
+
+/**This testharness class is used for the class
+ * MySingleton. This class is used to create
+ * multiple instance using reflection.
+ * @author Debadatta Mishra(PIKU)
+ *
+ */
+public class SingletonTestHarness {
+    public static void main(String[] args) {
+        try {
+            Class cls = Class.forName("com.dds.core.MySingleton");
+            Constructor[] constructors = cls.getDeclaredConstructors();
+            System.out.println("Constructor Name--->>>"+constructors[0].getName());
+            constructors[0].setAccessible(true);
+            /*
+             * Object creation using reflection
+             */
+            System.out.println("Object creation using reflection--->>>"
+                    + constructors[0].newInstance());
+            /*
+             * Create another instance
+             */
+            System.out.println("Another object creation using reflection--->>>"
+                    + constructors[0].newInstance());
+            /*
+             * Normal object creation
+             */
+            MySingleton single = MySingleton.getInstance();
+            System.out.println("Normal object creation--->>>"+single);
+        } catch( Exception e ) {
+            e.printStackTrace();
+        }
+    }
+}
+----
+
+This test harness class breaks the concept of singleton design pattern defined above in the class `MySingleton`. There are ways you can create a singleton class so that reflection can not break it. I will explain this concept in my next article regarding singleton.
+
+=== Case-5: Modifying the static field value
+
+Now this concept sounds very interesting. Think that a junior hacker is trying to break your code and trying to populate a different value. The person has the tool called reflection. Please see the following piece of code.
+
+[source,java]
+----
+package com.dds.core;
+
+/**
+ * This is a class where there is only one
+ * private static field and public static
+ * method.
+ * @author Debadatta Mishra(PIKU)
+ *
+ */
+public class FieldChanger {
+    private static String name = "John" ;
+
+    public static String getName() {
+        return name ;
+    }
+}
+----
+
+In this above class, name field is a static field which is out side the scope of the instance. Whatever value you modify, you will get the same value in the method. The developer has written made this static field as private as the method is static. However the hacker tries to break and modify the value. Please refer to the following test harness class.
+
+[source,java]
+----
+package com.dds.test;
+
+import java.lang.reflect.Field;
+import com.dds.core.FieldChanger;
+
+
+/**This testharness class is used for
+ * the class FieldChanger to change the
+ * value of the field using reflection.
+ * @author Debadatta Mishra(PIKU)
+ *
+ */
+public class FieldChangeTestharness {
+    public static void main(String[] args) {
+        try {
+            Class cls = Class.forName("com.dds.core.FieldChanger");
+            Object obj = cls.newInstance();
+            Field[] fields = cls.getDeclaredFields();
+            fields[0].setAccessible( true );
+            System.out.println(FieldChanger.getName());
+            fields[0].set( null ,"Horse" );
+            System.out.println(FieldChanger.getName());
+        } catch( Exception e ) {
+            e.printStackTrace();
+        }
+    }
+}
+----
+
+So in the above test harness class, you will get the modified value which is inserted using reflefction.
+
+=== Caution
+
+My article is only meant for learning and it does not bear any commercial significance .I request you not to integrate in your actual development of the organization. I want to help the freshers, novice developers or those who are new java development environment.
+
+== Conclusion
+
+My idea of this article is to give a pleasure of using reflection. I do not want to find out any error or mistake or limitations of concept. I have written to present you an interesting concept on reflection. Please provide me your valuable feedback at `debadattamishra@aol.com`. If you find any error or errata, please report to me as soon as possible.
